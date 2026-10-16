@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desempenho — Conferência de OC</title>
+<style>
+  :root{
+    --bg:#eef1f6;--bg-card:#fff;--bg-subtle:#f8fafc;
+    --border:#e1e5ed;--border-strong:#cdd4e0;
+    --text:#12172a;--text-dim:#545e75;--text-faint:#96a0b6;
+    --accent-1:#4c8dae;--accent-2:#7c6fcf;--accent-solid:#4c8dae;
+    --accent-grad:linear-gradient(135deg,var(--accent-1),var(--accent-2));
+    --radius:12px;--shadow:0 1px 2px rgba(15,23,42,.04),0 2px 6px rgba(15,23,42,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1420;--bg-card:#1a2333;--bg-subtle:#232f43;
+    --border:#2c3a52;--border-strong:#3c4d6b;
+    --text:#e7ecf6;--text-dim:#aab6cc;--text-faint:#7180a0;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.35);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;padding:12px 22px;
+    background:color-mix(in srgb,var(--bg-card) 88%,transparent);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border)}
+  .back{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:.78rem;font-weight:600;
+    color:var(--text-dim);padding:6px 12px;border:1px solid var(--border-strong);border-radius:8px}
+  .back:hover{border-color:var(--accent-1);color:var(--accent-solid)}
+  h1{font-size:1rem;font-weight:750}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 22px 60px}
+  .filtros{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .filtros button{font-size:.74rem;font-weight:600;padding:7px 13px;border-radius:8px;
+    border:1px solid var(--border-strong);background:var(--bg-card);color:var(--text);cursor:pointer}
+  .filtros button.on{background:var(--accent-grad);color:#fff;border-color:transparent}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  @media(max-width:640px){.kpis{grid-template-columns:1fr}}
+  .kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi-num{font-size:1.7rem;font-weight:800;letter-spacing:-.02em}
+  .kpi-lbl{font-size:.68rem;color:var(--text-faint);margin-top:4px}
+  .tbl-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius);overflow:hidden}
+  th,td{padding:11px 14px;text-align:left;font-size:.78rem;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{font-size:.63rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);background:var(--bg-subtle);font-weight:700}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .u{display:flex;align-items:center;gap:8px;font-weight:600}
+  .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+  .pos{color:var(--text-faint);font-weight:700;text-align:center}
+  .vazio{padding:30px;text-align:center;color:var(--text-faint);font-size:.8rem;
+    background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)}
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/">&larr; Board</a>
+  <h1>📊 Desempenho por usuário</h1>
+</header>
+<div class="wrap">
+  <div class="filtros" id="filtros">
+    <button data-p="dia">Hoje</button>
+    <button data-p="semana">7 dias</button>
+    <button data-p="mes">30 dias</button>
+    <button data-p="total" class="on">Total</button>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div id="tabela"><div class="vazio">Carregando…</div></div>
+</div>
+<script>
+  // Herda tema + cor de destaque do board (mesmas chaves de localStorage).
+  try{
+    const a=JSON.parse(localStorage.getItem("conf_oc_accent")||"null");
+    if(a&&a.c1){const r=document.documentElement.style;
+      r.setProperty("--accent-1",a.c1);r.setProperty("--accent-2",a.c2);
+      r.setProperty("--accent-solid",a.c1);
+      r.setProperty("--accent-grad",`linear-gradient(135deg,${a.c1},${a.c2})`);}
+  }catch{}
+  document.documentElement.setAttribute("data-theme",
+    localStorage.getItem("conf_oc_tema")==="escuro"?"dark":"light");
+
+  const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  function fmtDur(seg){
+    if(seg==null) return "—";
+    const h=seg/3600;
+    if(h<1) return Math.round(seg/60)+" min";
+    if(h<48) return (h.toFixed(1).replace(".0",""))+" h";
+    return Math.floor(h/24)+"d "+Math.round(h%24)+"h";
+  }
+  function fmtData(s){ if(!s) return "—"; const d=new Date(s);
+    return isNaN(d)?s:d.toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); }
+
+  let periodo="total";
+  async function carregar(){
+    document.getElementById("tabela").innerHTML='<div class="vazio">Carregando…</div>';
+    let r;
+    try{ r=await fetch("/api/crm/desempenho?periodo="+periodo); }
+    catch{ document.getElementById("tabela").innerHTML='<div class="vazio">Falha de conexão.</div>'; return; }
+    if(r.status===401||r.status===403){ location.href="/"; return; }
+    const txt=await r.text(); let d;
+    try{ d=JSON.parse(txt); }
+    catch{ document.getElementById("tabela").innerHTML='<div class="vazio">Erro ao carregar (reinicie o servidor).</div>'; return; }
+    render(d);
+  }
+  function render(d){
+    document.getElementById("kpis").innerHTML=`
+      <div class="kpi"><div class="kpi-num">${d.geral.atribuidas_total||0}</div><div class="kpi-lbl">Notas atribuídas (total)</div></div>
+      <div class="kpi"><div class="kpi-num">${d.geral.finalizadas_total||0}</div><div class="kpi-lbl">Notas finalizadas (INTEGRADA)</div></div>
+      <div class="kpi"><div class="kpi-num">${fmtDur(d.geral.tempo_medio_seg)}</div><div class="kpi-lbl">Tempo médio: atribuição → finalizada</div></div>`;
+    const us=d.usuarios||[];
+    if(!us.length){ document.getElementById("tabela").innerHTML='<div class="vazio">Nenhuma atribuição registrada ainda.</div>'; return; }
+    document.getElementById("tabela").innerHTML=`
+      <div class="tbl-scroll"><table>
+        <thead><tr>
+          <th class="num">#</th><th>Usuário</th>
+          <th class="num">Atribuídas</th><th class="num">Finalizadas</th>
+          <th class="num">Tempo médio</th><th class="num">Mín / Máx</th>
+          <th>Última finalizada</th>
+        </tr></thead>
+        <tbody>${us.map((u,i)=>`
+          <tr>
+            <td class="pos num">${i+1}</td>
+            <td><span class="u"><span class="dot" style="background:${esc(u.cor)}"></span>${esc(u.nomusu)}</span></td>
+            <td class="num">${u.atribuidas}</td>
+            <td class="num"><strong>${u.finalizadas}</strong></td>
+            <td class="num">${fmtDur(u.tempo_medio_seg)}</td>
+            <td class="num">${fmtDur(u.tempo_min_seg)} / ${fmtDur(u.tempo_max_seg)}</td>
+            <td>${fmtData(u.ultima_finalizada)}</td>
+          </tr>`).join("")}</tbody>
+      </table></div>`;
+  }
+  document.getElementById("filtros").addEventListener("click",e=>{
+    const b=e.target.closest("[data-p]"); if(!b) return;
+    document.querySelectorAll("#filtros button").forEach(x=>x.classList.toggle("on",x===b));
+    periodo=b.dataset.p; carregar();
+  });
+  carregar();
+</script>
+</body>
+</html>

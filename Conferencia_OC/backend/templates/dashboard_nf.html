@@ -1,0 +1,3395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conferência de OC — Notas Fiscais</title>
+<style>
+  :root {
+    --bg:         #eef1f6;
+    --bg-col:     #e4e7ec;
+    --bg-card:    #ffffff;
+    --bg-subtle:  #f8fafc;
+    --border:     #e1e5ed;
+    --border-strong: #cdd4e0;
+    --text:       #12172a;
+    --text-dim:   #545e75;
+    --text-faint: #96a0b6;
+    --c-pend:  #4c8dae;
+    --c-ocok:  #7c6fcf;
+    --c-cons:  #0891b2;
+    --c-agu:   #d97706;
+    --c-aprov: #16a34a;
+    --c-trat:  #dc2626;
+    --red:     #dc2626;
+    /* Cor de destaque do sistema — trocável pelo usuário em "Cor da tela"
+       (menu do avatar). Sobrescrita em runtime via <html style="--accent-1:…">
+       por aplicarAccent(); os valores aqui são o padrão (azul→roxo). */
+    --accent-1: #4c8dae;
+    --accent-2: #7c6fcf;
+    --accent-solid: #4c8dae;
+    --accent-grad: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    --mono: "JetBrains Mono","Consolas",monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --ease: cubic-bezier(.4,0,.2,1);
+    --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+    --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 2px 6px rgba(15,23,42,0.05);
+    --shadow-hover: 0 8px 22px -6px rgba(15,23,42,0.16), 0 2px 8px rgba(15,23,42,0.06);
+    --shadow-lg: 0 24px 60px -12px rgba(15,23,42,0.28), 0 4px 16px rgba(15,23,42,0.08);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent-1) 22%, transparent);
+  }
+
+  /* ── Tema escuro (opcional, via "Cor da tela" no menu do usuário) ────
+     Guardado no navegador (localStorage "conf_oc_tema"), aplicado em
+     <html data-theme="dark"> por aplicarTema(). Só redefine a paleta de
+     superfície/texto — o resto do CSS já usa essas variáveis. Os selos
+     pastel de status (sbadge/alertas) ficam mais vivos no escuro, mas
+     legíveis. */
+  :root[data-theme="dark"] {
+    --bg:         #0f1420;
+    --bg-col:     #131a29;
+    --bg-card:    #1a2333;
+    --bg-subtle:  #232f43;
+    --border:     #2c3a52;
+    --border-strong: #3c4d6b;
+    --text:       #e7ecf6;
+    --text-dim:   #aab6cc;
+    --text-faint: #7180a0;
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.35);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.35);
+    --shadow-hover: 0 8px 22px -6px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 24px 60px -12px rgba(0,0,0,0.7), 0 4px 16px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="dark"] body {
+    background:
+      radial-gradient(1200px 480px at 100% -10%, color-mix(in srgb, var(--accent-1) 16%, transparent), transparent 60%),
+      radial-gradient(1000px 420px at -5% 0%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 55%),
+      var(--bg);
+  }
+
+  /* ── Tema escuro: ajustes finos ──────────────────────────────
+     Os selos/avisos de status abaixo usam fundo bem claro no tema padrão
+     (pra contrastar com fundo branco). No escuro isso vira uma "mancha"
+     clara, então cada família de cor vira um tom translúcido sobre o
+     fundo do próprio tema escuro. `color-scheme: dark` avisa o navegador
+     pra desenhar campos nativos (o menu suspenso do <select>, por
+     exemplo) já no estilo escuro. */
+  :root[data-theme="dark"] { color-scheme: dark; }
+  :root[data-theme="dark"] select,
+  :root[data-theme="dark"] option {
+    background: var(--bg-subtle);
+    color: var(--text);
+  }
+
+  :root[data-theme="dark"] .nav-ocalerta-toggle:hover,
+  :root[data-theme="dark"] .ocalerta-row:hover,
+  :root[data-theme="dark"] .nf-tempo.urgente,
+  :root[data-theme="dark"] .nf-acao.urgente,
+  :root[data-theme="dark"] .sbadge.divergente,
+  :root[data-theme="dark"] .modal-close:hover,
+  :root[data-theme="dark"] .modal-situacao.erro,
+  :root[data-theme="dark"] .item-alerta.sem-oc,
+  :root[data-theme="dark"] .btn.danger,
+  :root[data-theme="dark"] .pop-item.danger:hover {
+    background: color-mix(in srgb, #dc2626 20%, var(--bg-card));
+    color: #fca5a5;
+    border-color: color-mix(in srgb, #dc2626 45%, transparent);
+  }
+  :root[data-theme="dark"] .btn.danger:hover { background: color-mix(in srgb, #dc2626 30%, var(--bg-card)); }
+  :root[data-theme="dark"] .alert-item-row.erro { color: #fca5a5; border-left-color: color-mix(in srgb, #dc2626 55%, transparent); }
+  :root[data-theme="dark"] .item-row.divergente {
+    border-left-color: color-mix(in srgb, #dc2626 55%, transparent);
+    background: color-mix(in srgb, #dc2626 10%, var(--bg-subtle));
+  }
+
+  :root[data-theme="dark"] .nf-tempo.atencao,
+  :root[data-theme="dark"] .nf-acao.aguardar,
+  :root[data-theme="dark"] .sbadge.aprovacao,
+  :root[data-theme="dark"] .modal-situacao.warn,
+  :root[data-theme="dark"] .item-alerta.insuf,
+  :root[data-theme="dark"] .nf-atribuicao-chip.sem-atribuicao {
+    background: color-mix(in srgb, #d97706 20%, var(--bg-card));
+    color: #fbbf24;
+    border-color: color-mix(in srgb, #d97706 45%, transparent);
+  }
+  :root[data-theme="dark"] .alert-item-row.warn { color: #fbbf24; border-left-color: color-mix(in srgb, #d97706 55%, transparent); }
+
+  :root[data-theme="dark"] .nf-acao.importar,
+  :root[data-theme="dark"] .sbadge.ok,
+  :root[data-theme="dark"] .modal-situacao.ok {
+    background: color-mix(in srgb, #16a34a 20%, var(--bg-card));
+    color: #86efac;
+    border-color: color-mix(in srgb, #16a34a 45%, transparent);
+  }
+
+  :root[data-theme="dark"] .modal-situacao.info,
+  :root[data-theme="dark"] .bell-item.unread {
+    background: color-mix(in srgb, #3b82f6 20%, var(--bg-card));
+    color: #93c5fd;
+    border-color: color-mix(in srgb, #3b82f6 45%, transparent);
+  }
+
+  :root[data-theme="dark"] .sbadge.consolidou,
+  :root[data-theme="dark"] .item-alerta.consolidada {
+    background: color-mix(in srgb, #0891b2 20%, var(--bg-card));
+    color: #67e8f9;
+    border-color: color-mix(in srgb, #0891b2 45%, transparent);
+  }
+
+  :root[data-theme="dark"] .sbadge.cadastro {
+    background: color-mix(in srgb, #be185d 20%, var(--bg-card));
+    color: #f9a8d4;
+    border-color: color-mix(in srgb, #be185d 45%, transparent);
+  }
+
+  :root[data-theme="dark"] .crm-rank-row.top1 .crm-rank-pos {
+    background: color-mix(in srgb, #ca8a04 25%, var(--bg-card));
+    border-color: color-mix(in srgb, #ca8a04 55%, transparent);
+  }
+
+  /* Dois avisos raros do modal (diagnóstico de OC sem produto compatível,
+     e "fora do portfólio") têm a cor escrita direto no HTML pelo
+     JavaScript, não numa classe CSS — por isso a troca aqui mira o
+     próprio atributo style, sem precisar mexer no JavaScript. */
+  :root[data-theme="dark"] .modal-section[style*="background:#fffbeb"] {
+    background: color-mix(in srgb, #d97706 16%, var(--bg-card)) !important;
+  }
+  :root[data-theme="dark"] .modal-section[style*="background:#fdf2f8"] {
+    background: color-mix(in srgb, #be185d 16%, var(--bg-card)) !important;
+  }
+  :root[data-theme="dark"] [style*="color:#92400e"],
+  :root[data-theme="dark"] [style*="color:#78350f"] { color: #fbbf24 !important; }
+  :root[data-theme="dark"] [style*="color:#be185d"],
+  :root[data-theme="dark"] [style*="color:#831843"] { color: #f9a8d4 !important; }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 480px at 100% -10%, rgba(76,141,174,0.06), transparent 60%),
+      radial-gradient(1000px 420px at -5% 0%, rgba(124,111,207,0.05), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Scrollbars refinadas — só estética, mesmo comportamento nativo */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong); border-radius: 20px;
+    border: 2px solid var(--bg-card);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #a8b1c4; }
+
+  /* ── Header ──────────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+    backdrop-filter: blur(10px) saturate(1.4);
+    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    border-bottom: 1px solid var(--border);
+    padding: 11px 22px;
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 14px;
+    box-shadow: var(--shadow-xs);
+  }
+  .heading-block { display: flex; align-items: center; gap: 11px; }
+  .heading-mark {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent-grad);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px -2px rgba(76,141,174,0.55), inset 0 1px 0 rgba(255,255,255,0.25);
+    transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+  }
+  .heading-block:hover .heading-mark {
+    transform: rotate(-4deg) scale(1.05);
+    box-shadow: 0 6px 16px -3px rgba(76,141,174,0.6), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .heading-mark svg { width: 15px; height: 15px; }
+  header h1 { font-size: 0.96rem; font-weight: 750; letter-spacing: -0.01em; color: var(--text); }
+  header h1 .accent {
+    background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .subtitle { font-size: 0.68rem; color: var(--text-faint); margin-top: 1px; letter-spacing: 0.01em; }
+  .status-pill {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.7rem; font-weight: 500; color: var(--text-dim);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 20px;
+    box-shadow: inset 0 1px 2px rgba(15,23,42,0.03);
+    transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+  }
+  .status-pill:hover { border-color: var(--border-strong); background: var(--bg-card); }
+  .pulse-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #16a34a; animation: pulse 2.4s infinite;
+    transition: background 0.25s var(--ease);
+  }
+  .pulse-dot.stale { background: var(--red); animation: none; }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.4); }
+    70%      { box-shadow: 0 0 0 5px rgba(22,163,74,0); }
+  }
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  .main-layout {
+    display: flex; align-items: flex-start;
+    min-height: calc(100vh - 54px);
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  .sidebar {
+    width: 236px; flex-shrink: 0;
+    position: sticky; top: 54px;
+    height: calc(100vh - 54px);
+    overflow-y: auto;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section-title {
+    padding: 11px 14px 8px;
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* ── Guia de fluxo na sidebar ────────────────────────────── */
+  .fluxo-list { padding: 7px 0 11px; }
+  .fluxo-step {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 6px 14px;
+    font-size: 0.69rem; line-height: 1.45;
+    color: var(--text-dim);
+    border-radius: var(--radius-sm);
+    margin: 0 6px; width: calc(100% - 12px);
+    transition: background 0.18s var(--ease);
+  }
+  .fluxo-step:hover { background: var(--bg-subtle); }
+  .fluxo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 3px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .fluxo-arrow {
+    padding: 0 14px 0 25px;
+    font-size: 0.6rem; color: var(--text-faint);
+    margin: 1px 0;
+  }
+
+  /* ── Alertas na sidebar ──────────────────────────────────── */
+  .sidebar-header {
+    padding: 11px 14px 8px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    background: var(--bg-subtle);
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-faint);
+  }
+  .sidebar-count {
+    font-size: 0.62rem; font-weight: 700;
+    padding: 1px 8px; border-radius: 20px;
+    background: #fef2f2; color: #dc2626;
+    border: 1px solid #fecaca;
+    transition: background 0.25s var(--ease), color 0.25s var(--ease), border-color 0.25s var(--ease);
+  }
+  .sidebar-count.zero {
+    background: #f0fdf4; color: #16a34a;
+    border-color: #bbf7d0;
+  }
+  .alerts-list { display: flex; flex-direction: column; flex: 1; }
+  .alert-item-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 9px 14px 9px 12px;
+    border-bottom: 1px solid var(--border);
+    border-left: 2.5px solid transparent;
+    font-size: 0.69rem; line-height: 1.4; cursor: default;
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .alert-item-row:hover { background: var(--bg-subtle); }
+  .alert-item-row:last-child { border-bottom: none; }
+  .alert-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
+    animation: alertPop 0.35s var(--ease);
+  }
+  @keyframes alertPop { from { transform: scale(0); } to { transform: scale(1); } }
+  .alert-item-row.erro .alert-dot { background: #dc2626; }
+  .alert-item-row.warn .alert-dot { background: #d97706; }
+  .alert-item-row.ok   .alert-dot { background: #16a34a; }
+  .alert-item-row.erro { color: #7f1d1d; border-left-color: #fecaca; }
+  .alert-item-row.warn { color: #78350f; border-left-color: #fde68a; }
+  .alert-item-row.ok   { color: #14532d; border-left-color: #bbf7d0; }
+  .alert-empty-row {
+    padding: 20px 14px; font-size: 0.7rem;
+    color: var(--text-faint); text-align: center;
+  }
+
+  /* ── Alerta destacado: OCs geradas/aprovadas sem fechar há +3 dias (admin) ── */
+  .nav-ocalerta {
+    display: flex; flex-direction: column; min-height: 0;
+    margin: 8px 6px; border: 1px solid #fca5a5; border-radius: var(--radius-sm);
+    overflow: hidden; background: var(--bg-card);
+    box-shadow: 0 0 0 3px color-mix(in srgb, #dc2626 12%, transparent);
+  }
+  .nav-ocalerta.zerado { box-shadow: none; border-color: var(--border); }
+  .nav-ocalerta-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 9px 10px; border: none; cursor: pointer;
+    background: #fee2e2; color: #b91c1c;
+    font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    transition: background 0.15s var(--ease);
+  }
+  .nav-ocalerta.zerado .nav-ocalerta-toggle { background: var(--bg-subtle); color: var(--text-faint); }
+  .nav-ocalerta-toggle:hover { background: #fecaca; }
+  .nav-ocalerta.zerado .nav-ocalerta-toggle:hover { background: var(--bg-subtle); }
+  .nav-ocalerta-toggle .sidebar-count { margin-left: auto; }
+  .nav-ocalerta-toggle .chev { margin-left: 2px; font-size: 0.7rem; transition: transform 0.2s var(--ease); }
+  .nav-ocalerta.collapsed .chev { transform: rotate(-90deg); }
+  .nav-ocalerta.collapsed .ocalerta-list { display: none; }
+  .ocalerta-list { max-height: 40vh; overflow-y: auto; }
+  .ocalerta-row {
+    display: flex; align-items: flex-start; gap: 8px; width: 100%;
+    padding: 9px 11px; border: none; border-bottom: 1px solid var(--border);
+    border-left: 3px solid #dc2626; background: transparent;
+    text-align: left; font: inherit; cursor: pointer;
+    transition: background 0.15s var(--ease);
+  }
+  .ocalerta-row:hover { background: #fef2f2; }
+  .ocalerta-row:last-child { border-bottom: none; }
+  .oca-main { font-size: 0.72rem; font-weight: 700; color: var(--text); }
+  .oca-sub  { font-size: 0.63rem; color: var(--text-dim); margin-top: 2px; line-height: 1.4; display: block; }
+  .oca-dias {
+    margin-left: auto; flex-shrink: 0; font-size: 0.62rem; font-weight: 800;
+    color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca;
+    border-radius: 20px; padding: 1px 7px; white-space: nowrap;
+  }
+  .sidebar.collapsed .nav-ocalerta { margin: 8px 4px; }
+  .sidebar.collapsed .nav-ocalerta .nav-label,
+  .sidebar.collapsed .nav-ocalerta .chev,
+  .sidebar.collapsed .ocalerta-list { display: none; }
+  .sidebar.collapsed .nav-ocalerta-toggle { justify-content: center; padding: 8px; }
+  .sidebar.collapsed .nav-ocalerta-toggle .sidebar-count { margin-left: 0; }
+
+  /* ── Board ───────────────────────────────────────────────── */
+  .board-wrap { flex: 1; padding: 16px 16px 52px; min-width: 0; }
+  /* ALTERADO: 6 colunas agora (era 5; +1 "NF pendente importação XML") */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px; align-items: flex-start;
+  }
+  @media (max-width: 1400px) { .board { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 900px)  { .sidebar { display: none; } .board { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px)  { .board { grid-template-columns: 1fr; } }
+
+  /* ── Coluna ──────────────────────────────────────────────── */
+  .col { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+
+  .col-head {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+    box-shadow: var(--shadow);
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 6px;
+    border-top: 2.5px solid var(--col-color);
+    transition: box-shadow 0.2s var(--ease);
+  }
+  .col-head:hover { box-shadow: var(--shadow-hover); }
+  .col-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .col-icon {
+    width: 24px; height: 24px; border-radius: 7px;
+    background: color-mix(in srgb, var(--col-color) 14%, var(--bg-card));
+    border: 1.5px solid color-mix(in srgb, var(--col-color) 35%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 11px;
+  }
+  .col-title { font-size: 0.77rem; font-weight: 700; color: var(--text); line-height: 1.25; letter-spacing: -0.005em; }
+  .col-sub {
+    font-size: 0.58rem; color: var(--text-faint);
+    margin-top: 2px; line-height: 1.35;
+  }
+  .col-badge {
+    font-size: 0.66rem; font-weight: 700;
+    padding: 2px 9px; border-radius: 20px;
+    background: color-mix(in srgb, var(--col-color) 12%, var(--bg-card));
+    color: var(--col-color);
+    border: 1px solid color-mix(in srgb, var(--col-color) 30%, transparent);
+    flex-shrink: 0;
+    transition: transform 0.2s var(--ease);
+  }
+
+  /* ── Card ────────────────────────────────────────────────── */
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .nf-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--col-color);
+    padding: 11px 12px; cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.22s var(--ease), transform 0.22s var(--ease), border-color 0.22s var(--ease);
+    animation: cardIn 0.28s var(--ease) both;
+  }
+  .nf-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+    border-left-width: 4px;
+  }
+  .nf-card:active { transform: translateY(-1px); transition-duration: 0.06s; }
+
+  .nf-card-top {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 6px; margin-bottom: 3px;
+  }
+  .nf-num { font-size: 0.76rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+  .nf-num::before { content: "NF "; color: var(--text-faint); font-weight: 400; font-size: 0.65rem; }
+  .nf-tempo {
+    font-size: 0.6rem; font-weight: 600;
+    padding: 1px 6px; border-radius: 20px;
+    background: var(--bg-subtle); color: var(--text-faint); flex-shrink: 0;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  }
+  .nf-tempo.atencao { background: #fffbeb; color: #d97706; }
+  .nf-tempo.urgente { background: #fef2f2; color: #dc2626; }
+
+  .nf-for {
+    font-size: 0.7rem; color: var(--text-dim);
+    white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; line-height: 1.35; min-width: 0;
+  }
+  .nf-divider { height: 1px; background: var(--border); margin: 6px 0; }
+
+  .nf-card-meta {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 4px; flex-wrap: wrap;
+  }
+  .nf-valor { font-size: 0.71rem; font-weight: 700; color: #16a34a; letter-spacing: -0.005em; }
+
+  .nf-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 0.61rem; color: var(--text-faint);
+    background: var(--bg-subtle); padding: 2px 7px;
+    border-radius: 20px; border: 1px solid var(--border);
+    transition: border-color 0.16s var(--ease);
+  }
+  .nf-card:hover .chip { border-color: var(--border-strong); }
+  .chip.destaque { color: var(--text-dim); font-weight: 600; }
+
+  /* banner de próximo passo no card */
+  .nf-acao {
+    margin-top: 7px; padding: 5px 9px;
+    border-radius: var(--radius-sm); font-size: 0.63rem; font-weight: 600;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .nf-acao.importar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+  .nf-acao.urgente  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .nf-acao.aguardar { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+
+  /* ── Coluna vazia / loading ──────────────────────────────── */
+  .col-empty {
+    background: repeating-linear-gradient(-45deg, var(--bg-subtle) 0 10px, var(--bg-card) 10px 20px);
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius); padding: 20px 10px;
+    text-align: center; font-size: 0.68rem; color: var(--text-faint);
+  }
+  .col-loading {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; text-align: center;
+  }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--col-color, #4c8dae);
+    border-radius: 50%; margin: 0 auto 6px;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Status badge ────────────────────────────────────────── */
+  .sbadge {
+    display: inline-flex; align-items: center;
+    font-size: 0.58rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+    transition: transform 0.15s var(--ease);
+  }
+  .sbadge.ok         { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .sbadge.divergente { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .sbadge.aprovacao  { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+  .sbadge.consolidou { background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc; }
+  .sbadge.cadastro   { background: #fdf2f8; color: #a3195b; border: 1px solid #fbcfe8; }
+  .sbadge.neutro     { background: #f8fafc; color: #55617a; border: 1px solid #e2e8f0; }
+
+  /* ── Modal ───────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,20,35,0.44); backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 0.22s var(--ease), visibility 0s linear 0.22s;
+  }
+  .modal-overlay.open {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transition: opacity 0.22s var(--ease), visibility 0s linear 0s;
+  }
+  .modal {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; width: min(620px, 95vw); max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(10px) scale(0.98);
+    transition: transform 0.24s var(--ease);
+  }
+  .modal-overlay.open .modal { transform: translateY(0) scale(1); }
+  .modal-stripe { height: 4px; background: linear-gradient(90deg, var(--col-color, #4c8dae), color-mix(in srgb, var(--col-color, #4c8dae) 55%, #fff)); }
+  .modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 12px;
+    background: var(--bg-subtle);
+  }
+  .modal-nf-num { font-size: 1.02rem; font-weight: 750; color: var(--text); margin-bottom: 2px; letter-spacing: -0.01em; }
+  .modal-fornecedor { font-size: 0.76rem; color: var(--text-dim); }
+  .modal-close {
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text-dim); border-radius: 7px;
+    width: 27px; height: 27px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; flex-shrink: 0;
+    transition: border-color 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease), background 0.18s var(--ease);
+  }
+  .modal-close:hover { border-color: var(--red); color: var(--red); background: #fef2f2; transform: rotate(90deg); }
+  .modal-body { overflow-y: auto; flex: 1; }
+
+  /* banner de situação no topo do modal */
+  .modal-situacao {
+    padding: 11px 20px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.74rem; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-situacao.ok     { background: #f0fdf4; color: #166534; }
+  .modal-situacao.warn   { background: #fffbeb; color: #92400e; }
+  .modal-situacao.erro   { background: #fef2f2; color: #991b1b; }
+  .modal-situacao.info   { background: #eff6ff; color: #1e40af; }
+  .modal-situacao-icon   { font-size: 1.1rem; }
+
+  .modal-resumo {
+    display: flex; align-items: center; gap: 9px;
+    padding: 12px 20px; background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .resumo-stat {
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 15px; min-width: 72px; gap: 2px;
+    box-shadow: var(--shadow-xs);
+    transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
+  }
+  .resumo-stat:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  .resumo-stat .rs-val { font-size: 1.08rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .resumo-stat .rs-lbl { font-size: 0.58rem; color: var(--text-faint); text-align: center; }
+  .resumo-stat.ok  .rs-val { color: #16a34a; }
+  .resumo-stat.div .rs-val { color: #dc2626; }
+  .resumo-stat.neu .rs-val { color: #0891b2; }
+
+  .modal-section { padding: 13px 20px; border-bottom: 1px solid var(--border); }
+  .modal-section:last-child { border-bottom: none; }
+  .modal-section-title {
+    font-size: 0.62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-faint); margin-bottom: 10px;
+  }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .info-item { display: flex; flex-direction: column; gap: 2px; }
+  .info-label { font-size: 0.6rem; color: var(--text-faint); font-weight: 500; }
+  .info-value { font-size: 0.76rem; color: var(--text); font-weight: 500; }
+
+  .oc-box {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 8px; overflow: hidden;
+    transition: border-color 0.16s var(--ease);
+  }
+  .oc-box:hover { border-color: var(--border-strong); }
+  .oc-box:last-child { margin-bottom: 0; }
+  .oc-box-head {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 8px;
+    padding: 9px 12px; background: var(--bg-subtle);
+    cursor: pointer; font-size: 0.73rem;
+    transition: background 0.16s var(--ease);
+  }
+  .oc-box-head:hover { background: #f1f4f9; }
+  .oc-box-head .oc-num { color: #7c6fcf; font-weight: 700; }
+  .oc-box-head .oc-meta { color: var(--text-faint); font-size: 0.63rem; }
+  .oc-box-body { padding: 0 10px 8px; }
+  .oc-itens-header {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 4px; padding: 6px 4px; font-size: 0.59rem;
+    color: var(--text-faint); font-weight: 600;
+    border-bottom: 1px solid var(--border); margin-bottom: 3px;
+  }
+  .oc-item-row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 4px; align-items: start;
+    padding: 6px 4px; font-size: 0.7rem;
+    border-bottom: 1px solid #f0f2f5;
+  }
+  .oc-item-row:last-child { border-bottom: none; }
+
+  .item-row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 6px; align-items: center;
+    padding: 9px 12px; background: var(--bg-subtle);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 6px; font-size: 0.72rem;
+    transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+  }
+  .item-row:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); }
+  .item-row:last-child { margin-bottom: 0; }
+  .item-row.divergente { border-left: 3px solid #fecaca; background: #fffafa; }
+  .item-prod { color: var(--text); word-break: break-word; white-space: normal; }
+  .item-cod  { font-size: 0.6rem; color: var(--text-faint); margin-top: 1px; }
+  .item-qtd  { font-size: 0.7rem; color: var(--text-dim); text-align: right; }
+  .item-oc   { font-size: 0.7rem; text-align: right; font-weight: 600; }
+  .item-oc.ok  { color: #16a34a; }
+  .item-oc.nok { color: #dc2626; }
+  .item-alerta {
+    display: inline-flex; align-items: center; gap: 3px;
+    margin-top: 4px; padding: 2px 7px;
+    border-radius: 5px; font-size: 0.63rem; font-weight: 600;
+  }
+  .item-alerta.sem-oc  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .item-alerta.insuf   { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+  .item-alerta.consolidada { background: #eff6ff; color: #0891b2; border: 1px solid #bae6fd; }
+
+  /* ── Botões genéricos (login, atribuição, CRM, conferência) ─ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-family: var(--sans); font-size: 0.74rem; font-weight: 600;
+    padding: 8px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text);
+    cursor: pointer; transition: all 0.15s var(--ease);
+  }
+  .btn:hover { border-color: #a8b1c4; box-shadow: var(--shadow); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
+  .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn.primary { background: var(--accent-grad); color:#fff; border-color: transparent; }
+  .btn.primary:hover { box-shadow: 0 6px 16px -3px color-mix(in srgb, var(--accent-1) 45%, transparent); }
+  .btn.danger  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .btn.danger:hover { background: #fee2e2; box-shadow: 0 4px 12px -3px rgba(220,38,38,0.25); }
+  .btn.sm { padding: 5px 10px; font-size: 0.68rem; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .field label { font-size: 0.68rem; font-weight: 600; color: var(--text-dim); }
+  .field input, .field select {
+    font-family: var(--sans); font-size: 0.8rem; padding: 9px 11px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--bg-subtle); color: var(--text); outline: none;
+    transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), background 0.15s var(--ease);
+  }
+  .field input:focus, .field select:focus { border-color: #4c8dae; background: var(--bg-card); box-shadow: var(--focus-ring); }
+  .field-erro { font-size: 0.68rem; color: #dc2626; min-height: 14px; }
+
+    /* ── Login — ocupa a tela inteira, dividido em dois painéis ── */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 300; display: none;
+  }
+  .login-overlay.open { display: flex; }
+
+  .login-box {
+    width: 100%; height: 100%;
+    display: flex; overflow: hidden;
+    background: linear-gradient(150deg, var(--accent-1) 0%, color-mix(in srgb, var(--accent-1), var(--accent-2)) 55%, var(--accent-2) 100%);
+    animation: loginIn .5s var(--ease);
+  }
+  @keyframes loginIn {
+    from { opacity: 0; transform: scale(1.01); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* painel de marca (esquerda) — ocupa a altura toda da tela */
+  .login-brand {
+    position: relative; z-index: 1; flex: 1 1 42%;
+    padding: 48px clamp(28px, 6vw, 72px);
+    display: flex; flex-direction: column; justify-content: space-between;
+    color: #fff;
+    overflow: hidden;
+  }
+  .login-brand::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(480px 260px at 90% 10%, rgba(255,255,255,0.16), transparent 60%),
+      radial-gradient(420px 240px at 0% 100%, rgba(0,0,0,0.14), transparent 55%);
+  }
+  .login-brand > * { position: relative; z-index: 1; }
+  /* marca d'água decorativa — mesmo ícone do selo, ampliado e discreto */
+  .login-brand-watermark {
+    position: absolute; right: -70px; bottom: -70px; z-index: 0;
+    width: min(420px, 60vw); height: min(420px, 60vw);
+    opacity: 0.10; transform: rotate(-8deg);
+    pointer-events: none;
+  }
+  .login-brand-logo {
+    width: 42px; height: 42px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
+  }
+  .login-brand-logo .icon { width: 22px; height: 22px; }
+  .login-brand-title { font-size: clamp(1.7rem, 2.6vw, 2.3rem); font-weight: 800; letter-spacing: -0.02em; margin-top: 22px; line-height: 1.15; }
+  .login-brand-sub   { font-size: 0.92rem; opacity: 0.88; margin-top: 10px; line-height: 1.55; max-width: 32ch; }
+  .login-brand-foot  {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em; opacity: 0.85;
+  }
+  .login-brand-foot .icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* painel do formulário (direita) — curva "mordendo" o painel colorido */
+  .login-form-panel {
+    position: relative; z-index: 2; flex: 1 1 58%;
+    background: var(--bg-card);
+    border-radius: clamp(60px, 12vw, 220px) 0 0 clamp(60px, 12vw, 220px);
+    margin-left: -100px;
+    padding: 40px clamp(28px, 6vw, 80px) 40px calc(clamp(28px, 6vw, 80px) + 100px);
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    box-shadow: -24px 0 50px -12px rgba(15,23,42,.18);
+    overflow-y: auto;
+  }
+  .login-form-inner { width: 100%; max-width: 400px; }
+  .login-title { font-size: 1.3rem; font-weight: 750; margin-bottom: 3px; letter-spacing: -0.01em; }
+  .login-sub   { font-size: 0.8rem; color: var(--text-faint); margin-bottom: 20px; line-height: 1.5; }
+
+  .login-steps { display: flex; gap: 6px; margin-bottom: 20px; }
+  .login-steps i { height: 3px; flex: 1; border-radius: 3px; background: var(--border-strong); transition: background .25s var(--ease); }
+  .login-steps i.on { background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); }
+
+  /* ícones inline (sprite #icon-*) — herdam a cor do texto ao redor */
+  .icon { width: 17px; height: 17px; flex-shrink: 0; }
+  .icon-sm { width: 15px; height: 15px; flex-shrink: 0; }
+
+  /* ── Ícones do painel principal (cabeçalho, colunas, cards, modais) ── */
+  .icon-inline { display: inline-block; vertical-align: -2px; flex-shrink: 0; }
+
+  /* botão de copiar número (NF / OC) — usado no card, na sidebar e no modal */
+  .copy-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 19px; height: 19px; border-radius: 6px; flex-shrink: 0;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--text-faint); padding: 0;
+    transition: background .15s var(--ease), color .15s var(--ease);
+  }
+  .copy-btn:hover { background: var(--border); color: var(--text-dim); }
+  .copy-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .copy-btn.copiado { color: #16a34a; }
+  .modal-nf-num-row { display: flex; align-items: center; gap: 6px; }
+  .col-icon { color: var(--col-color); }
+  .nav-ico-inline { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
+  .modal-situacao-icon { display: flex; align-items: center; }
+
+  /* círculo com as iniciais do fornecedor, no card do board */
+  .nf-for-row { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 6px; }
+  .nf-for-avatar {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.56rem; font-weight: 700; color: #fff; letter-spacing: -0.02em;
+  }
+
+  /* inputs escopados no login — não mexem nos outros modais */
+  .login-box .field { margin-bottom: 14px; }
+  .login-box .field label { font-size: 0.72rem; }
+  .login-box .field input {
+    font-size: 0.88rem; padding: 12px 14px 12px 40px; border-radius: 999px;
+    width: 100%;
+  }
+  .login-box .input-wrap { position: relative; display: flex; align-items: center; }
+  .login-box .input-wrap input { flex: 1; }
+  .login-box .input-wrap:has(.pw-toggle) input { padding-right: 42px; }
+  .login-box .input-wrap .field-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    display: flex; color: var(--text-faint); pointer-events: none;
+  }
+  .login-box .pw-toggle {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 30px; height: 30px; border: none; background: transparent; cursor: pointer;
+    color: var(--text-faint); border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s var(--ease), color .15s var(--ease);
+  }
+  .login-box .pw-toggle:hover { background: var(--border); color: var(--text-dim); }
+  .login-box .pw-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .login-box .btn {
+    padding: 12px 20px; font-size: 0.8rem; border-radius: 999px;
+    letter-spacing: 0.02em; text-transform: uppercase; font-weight: 700;
+  }
+  .login-box .btn.primary { box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-1) 55%, transparent); }
+  .login-box .btn .icon { width: 15px; height: 15px; }
+
+  .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-dot {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: transform 0.12s var(--ease);
+  }
+  .color-dot:hover { transform: scale(1.12); }
+  .color-dot.selected { border-color: var(--text); box-shadow: 0 0 0 2px #fff inset; }
+
+  @media (max-width: 820px) {
+    .login-box { flex-direction: column; overflow-y: auto; }
+    .login-brand { flex: 0 0 auto; padding: 32px 28px 28px; }
+    .login-brand-title { font-size: 1.4rem; margin-top: 14px; }
+    .login-brand-sub { max-width: none; }
+    .login-brand-foot { display: none; }
+    .login-brand-watermark { display: none; }
+    .login-form-panel {
+      flex: 1 1 auto; border-radius: 26px 26px 0 0; margin: -26px 0 0;
+      padding: 32px 28px 40px; box-shadow: 0 -18px 40px -16px rgba(15,23,42,.18);
+      align-items: stretch;
+    }
+    .login-form-inner { max-width: none; }
+  }
+
+  /* ── Header: usuário / sino / CRM ────────────────────────── */
+  .header-actions { display: flex; align-items: center; gap: 10px; }
+  .user-badge {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.72rem; font-weight: 600; color: var(--text-dim);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    padding: 5px 11px 5px 6px; border-radius: 20px;
+    transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+  }
+  .user-badge:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); }
+  .user-dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 1px 3px rgba(15,23,42,0.15); }
+  .bell-btn {
+    position: relative; width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--bg-subtle);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.95rem;
+    transition: border-color 0.18s var(--ease), background 0.18s var(--ease), box-shadow 0.18s var(--ease), transform 0.18s var(--ease);
+  }
+  .bell-btn:hover { border-color: var(--border-strong); background: var(--bg-card); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .bell-count {
+    position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px;
+    border-radius: 8px; background: var(--red); color: #fff;
+    font-size: 0.58rem; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    padding: 0 3px; display: none;
+    box-shadow: 0 2px 6px -1px rgba(220,38,38,0.5);
+  }
+  .bell-count.show { display: flex; }
+  .bell-panel {
+    position: absolute; top: 44px; right: 0; width: 320px; max-height: 380px; overflow-y: auto;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); display: none; z-index: 60;
+  }
+  .bell-panel.open { display: block; }
+  .bell-panel-head { padding: 10px 14px; font-size: 0.74rem; font-weight: 700; border-bottom: 1px solid var(--border); }
+  .bell-item { padding: 9px 14px; font-size: 0.72rem; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  .bell-item:last-child { border-bottom: none; }
+  .bell-item.unread { background: #eff6ff; color: var(--text); font-weight: 600; }
+  .bell-item-time { font-size: 0.6rem; color: var(--text-faint); margin-top: 2px; font-weight: 400; }
+  .bell-empty { padding: 16px; font-size: 0.7rem; color: var(--text-faint); text-align: center; }
+  .header-pos { position: relative; }
+
+  /* ── Atribuição no card / modal ─────────────────────────── */
+  .nf-atribuicao-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.6rem; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+    background: rgba(0,0,0,0.05); margin-top: 5px;
+    box-shadow: var(--shadow-xs);
+  }
+  .nf-atribuicao-chip.sem-atribuicao {
+    background: #fffbeb; color: #b45309; border: 1px solid #fde68a;
+  }
+  .nf-atribuicao-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── CRM ─────────────────────────────────────────────────── */
+  .crm-overlay {
+    position: fixed; inset: 0; z-index: 200; display: none;
+    align-items: flex-start; justify-content: center; padding: 40px 16px;
+    background: rgba(15,23,42,0.35); backdrop-filter: blur(2px);
+    overflow-y: auto;
+  }
+  .crm-overlay.open { display: flex; }
+  .crm-box {
+    width: min(760px, 100%); background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
+  .crm-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  /* Total do período — KPI em destaque no topo do ranking */
+  .crm-total {
+    margin: 16px 20px 4px; padding: 14px 18px;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, #4c8dae 8%, transparent), color-mix(in srgb, #7c6fcf 6%, transparent)),
+      var(--bg-subtle);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .crm-total-num { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: var(--text); }
+  .crm-total-lbl { font-size: 0.68rem; color: var(--text-faint); margin-top: 4px; }
+
+  /* Lista ranqueada */
+  .crm-rank-list { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 20px; }
+  .crm-rank-row {
+    display: flex; align-items: center; gap: 11px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 10px 13px; box-shadow: var(--shadow-xs);
+    transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .crm-rank-row:hover { transform: translateY(-1px); box-shadow: var(--shadow); border-color: var(--border-strong); }
+  .crm-rank-pos {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 800; color: var(--text-dim);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+  }
+  .crm-rank-row.top1 .crm-rank-pos { background: #fef9c3; border-color: #fde047; }
+  .crm-rank-row.top2 .crm-rank-pos { background: #f1f5f9; border-color: #cbd5e1; }
+  .crm-rank-row.top3 .crm-rank-pos { background: #fef2e8; border-color: #fdba74; }
+  .crm-rank-user { flex: 1; min-width: 0; }
+  .crm-rank-nome { font-size: 0.78rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .crm-rank-meta { font-size: 0.6rem; color: var(--text-faint); margin-top: 1px; }
+  .crm-rank-bar-wrap {
+    flex: 1 1 140px; max-width: 180px; height: 6px; border-radius: 4px;
+    background: var(--bg-subtle); overflow: hidden; flex-shrink: 0;
+  }
+  .crm-rank-bar { height: 100%; border-radius: 4px; transition: width 0.4s var(--ease); }
+  .crm-rank-total { font-size: 1rem; font-weight: 800; min-width: 24px; text-align: right; flex-shrink: 0; }
+
+  /* ═══ Sidebar como menu de navegação (estilo app) ═══════════ */
+  .sidebar-nav { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    font-size: 0.8rem; font-weight: 600; color: var(--text-dim);
+    background: transparent; border: none; width: 100%; text-align: left;
+    cursor: pointer; transition: background 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .nav-item:hover { background: var(--bg-subtle); color: var(--text); }
+  .nav-item.active { background: color-mix(in srgb, var(--accent-1) 12%, transparent); color: var(--accent-solid); }
+  .nav-item .nav-ico {
+    width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    background: var(--bg-subtle); border: 1px solid var(--border);
+  }
+  .nav-item.active .nav-ico {
+    background: color-mix(in srgb, var(--accent-1) 16%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--accent-1) 34%, transparent);
+  }
+  .nav-divider { height: 1px; background: var(--border); margin: 8px 6px; }
+
+  /* Alertas colapsável dentro da sidebar-nav */
+  .nav-alertas { display: flex; flex-direction: column; min-height: 0; }
+  .nav-alertas-toggle {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-faint); background: transparent; border: none; width: 100%;
+    cursor: pointer; transition: background 0.15s var(--ease);
+  }
+  .nav-alertas-toggle:hover { background: var(--bg-subtle); }
+  .nav-alertas-toggle .sidebar-count { margin-left: auto; }
+  .nav-alertas-toggle .chev { margin-left: 6px; transition: transform 0.2s var(--ease); font-size: 0.7rem; }
+  .nav-alertas.collapsed .chev { transform: rotate(-90deg); }
+  .nav-alertas.collapsed .alerts-list { display: none; }
+  .nav-alertas .alerts-list { max-height: 42vh; overflow-y: auto; }
+
+  .sidebar-foot {
+    margin-top: auto; padding: 10px 12px;
+    border-top: 1px solid var(--border); background: var(--bg-subtle);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.68rem; color: var(--text-dim);
+  }
+  .sidebar-foot .pulse-dot { flex-shrink: 0; }
+    /* ── Recolher / expandir a sidebar ───────────────────────── */
+  .sidebar { transition: width 0.22s var(--ease); }
+  .sidebar-toggle {
+    display: flex; align-items: center; justify-content: flex-end;
+    width: 100%; padding: 8px 14px 2px; background: transparent; border: none;
+    cursor: pointer; color: var(--text-faint); font-size: 1rem; line-height: 1;
+    transition: color 0.15s var(--ease);
+  }
+  .sidebar-toggle:hover { color: var(--text-dim); }
+  .sidebar-toggle .st-ico { display: inline-block; transition: transform 0.22s var(--ease); }
+
+  .sidebar.collapsed { width: 58px; }
+  .sidebar.collapsed .sidebar-toggle { justify-content: center; padding-inline: 0; }
+  .sidebar.collapsed .sidebar-toggle .st-ico { transform: rotate(180deg); }
+  .sidebar.collapsed .nav-label { display: none; }
+  .sidebar.collapsed .nav-item,
+  .sidebar.collapsed .nav-alertas-toggle { justify-content: center; padding-left: 8px; padding-right: 8px; }
+  .sidebar.collapsed .nav-alertas { position: relative; }
+  .sidebar.collapsed .nav-alertas-toggle .chev { display: none; }
+  .sidebar.collapsed .nav-alertas-toggle .sidebar-count {
+    position: absolute; top: 3px; right: 6px; margin: 0; transform: scale(0.82);
+  }
+  .sidebar.collapsed .alerts-list { display: none; }
+  .sidebar.collapsed .sidebar-foot { justify-content: center; }
+  .sidebar.collapsed .sidebar-foot #lastUpdate { display: none; }
+
+  /* ═══ Menu do usuário (avatar com inicial + dropdown) ═══════ */
+  .user-menu { position: relative; }
+  .user-trigger {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    padding: 4px 9px 4px 4px; border-radius: 20px; cursor: pointer;
+    font-size: 0.72rem; font-weight: 600; color: var(--text-dim);
+    transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+  }
+  .user-trigger:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); }
+  .user-avatar {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 800; color: #fff;
+    background: var(--accent-solid); text-transform: uppercase;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.2);
+  }
+  .user-trigger .chev { font-size: 0.6rem; color: var(--text-faint); }
+  .user-pop, .col-pop {
+    position: absolute; z-index: 120; min-width: 210px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg);
+    padding: 6px; display: none;
+    animation: popIn 0.14s var(--ease);
+  }
+  .user-pop { top: calc(100% + 8px); right: 0; }
+  .user-pop.open, .col-pop.open { display: block; }
+  @keyframes popIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .pop-title {
+    padding: 8px 10px 4px; font-size: 0.6rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+  }
+  .pop-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    font-size: 0.76rem; font-weight: 500; color: var(--text-dim);
+    background: transparent; border: none; text-align: left; cursor: pointer;
+    transition: background 0.13s var(--ease), color 0.13s var(--ease);
+  }
+  .pop-item:hover { background: var(--bg-subtle); color: var(--text); }
+  .pop-item.danger:hover { background: #fef2f2; color: #b91c1c; }
+  .pop-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+  .pop-swatches { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 10px; }
+  .pop-swatch {
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: transform 0.12s var(--ease);
+  }
+  .pop-swatch:hover { transform: scale(1.15); }
+  .pop-swatch.sel { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-card) inset; }
+  .pop-theme-row { display: flex; gap: 6px; padding: 4px 10px 8px; }
+  .pop-theme-row button {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer;
+    font-size: 0.72rem; font-weight: 600; color: var(--text-dim);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    transition: border-color 0.13s var(--ease), color 0.13s var(--ease);
+  }
+  .pop-theme-row button:hover { border-color: var(--border-strong); color: var(--text); }
+  .pop-theme-row button.sel { border-color: var(--accent-1); color: var(--accent-solid); background: color-mix(in srgb, var(--accent-1) 12%, var(--bg-card)); }
+  .pop-sub-title { padding: 2px 10px 4px; font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+
+  /* ═══ Menu ⋮ no cabeçalho da coluna ════════════════════════ */
+  .col-menu-wrap { position: relative; flex-shrink: 0; }
+  .col-menu-btn {
+    width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid transparent; cursor: pointer;
+    color: var(--text-faint); font-size: 0.95rem; line-height: 1;
+    transition: background 0.13s var(--ease), border-color 0.13s var(--ease), color 0.13s var(--ease);
+  }
+  .col-menu-btn:hover { background: var(--bg-subtle); border-color: var(--border); color: var(--text-dim); }
+  .col-pop { top: calc(100% + 6px); right: 0; }
+  .col-pop .pop-sobre {
+    padding: 8px 10px 10px; font-size: 0.72rem; line-height: 1.5;
+    color: var(--text-dim); max-width: 260px; display: none;
+  }
+  .col-pop.mostra-sobre .pop-sobre { display: block; }
+
+  /* Painel de segurança da coluna (quem pode ver) — reusa .crm-overlay */
+  .seg-user-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 7px; font-size: 0.76rem;
+  }
+  .seg-user-row .user-dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; }
+  .seg-user-row label { margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.7rem; color: var(--text-dim); }
+
+  @media (max-width: 900px) {
+    .user-trigger .user-nome { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sprite de ícones (linha, sem preenchimento) — substitui emojis por
+     símbolos consistentes com o resto da interface. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="icon-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="5" width="14" height="16" rx="2.2"/>
+      <path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+      <path d="m9 13 2.2 2.2L15.5 10.5"/>
+    </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5 5 6v5.2c0 4.6 3 7.6 7 9.3 4-1.7 7-4.7 7-9.3V6L12 3.5Z"/>
+      <path d="m9.2 12 1.9 1.9 3.7-3.9"/>
+    </symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="8" r="3.2"/>
+      <path d="M5.5 20c.9-3.6 3.7-5.6 6.5-5.6s5.6 2 6.5 5.6"/>
+    </symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5.5" y="10.5" width="13" height="9" rx="2"/>
+      <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>
+      <circle cx="12" cy="14.7" r="1.05" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/>
+      <circle cx="12" cy="12" r="2.6"/>
+    </symbol>
+    <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 3.5l17 17"/>
+      <path d="M10.7 5.7A10.4 10.4 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a15.6 15.6 0 0 1-3.2 4.1M6.6 6.7C4 8.4 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.3 0 2.5-.3 3.6-.8"/>
+      <path d="M9.7 9.9a2.6 2.6 0 0 0 3.6 3.6"/>
+    </symbol>
+    <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12h16"/>
+      <path d="m13 5 7 7-7 7"/>
+    </symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 12H4"/>
+      <path d="m11 5-7 7 7 7"/>
+    </symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 3.5h7l4 4V19.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/>
+      <path d="M14 3.5v4h4"/>
+      <path d="M9 13h6M9 16.5h6"/>
+    </symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 10.5a6 6 0 0 1 12 0c0 4 1.4 5.3 1.4 5.3H4.6S6 14.5 6 10.5Z"/>
+      <path d="M10.3 19a1.9 1.9 0 0 0 3.4 0"/>
+    </symbol>
+    <symbol id="icon-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5c-4.7 0-8.5 3.6-8.5 8s3.6 7.5 7.2 7.5c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.2-.3-.4-.6-.4-1 0-.7.6-1.3 1.3-1.3h1.6c2.8 0 5.1-2.2 5.1-5C19.5 6 16.2 3.5 12 3.5Z"/>
+      <circle cx="7.7" cy="10.3" r=".9" fill="currentColor" stroke="none"/>
+      <circle cx="10.6" cy="7.4" r=".9" fill="currentColor" stroke="none"/>
+      <circle cx="14.4" cy="7.6" r=".9" fill="currentColor" stroke="none"/>
+      <circle cx="16.6" cy="10.6" r=".9" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.5" y="5" width="17" height="11" rx="1.5"/>
+      <path d="M9 20h6M12 16v4"/>
+    </symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.6"/>
+      <path d="M12 3v2M12 19v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M3 12h2M19 12h2M4.6 19.4l1.4-1.4M18 6l1.4-1.4"/>
+    </symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2Z"/>
+    </symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 20H6.5A1.5 1.5 0 0 1 5 18.5v-13A1.5 1.5 0 0 1 6.5 4H9"/>
+      <path d="M15.5 16.5 20 12l-4.5-4.5M20 12H9.5"/>
+    </symbol>
+    <symbol id="icon-clipboard-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="5" width="14" height="16" rx="2.2"/>
+      <path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+      <path d="M9 12h6M9 15.5h6M9 8.5h3"/>
+    </symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20V10M10 20V4M16 20v-7M4 20h16"/>
+    </symbol>
+    <symbol id="icon-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/>
+      <path d="m8.5 12.3 2.3 2.3 4.7-4.9"/>
+    </symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"/>
+      <path d="M12 11v5.3"/>
+      <circle cx="12" cy="8.2" r=".3" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-alert-triangle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4 21.5 20H2.5L12 4Z"/>
+      <path d="M12 10v4.2"/>
+      <circle cx="12" cy="17.2" r=".3" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="3.5" width="10" height="17" rx="1"/>
+      <path d="M15 9.5h4v11h-4M8 7.5h.01M11.5 7.5h.01M8 11h.01M11.5 11h.01M8 14.5h.01M11.5 14.5h.01M8 18h4"/>
+    </symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2"/>
+      <path d="M8 3v4M16 3v4M3.5 10h17"/>
+    </symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.8 7.5 12 3l8.2 4.5v9L12 21l-8.2-4.5v-9Z"/>
+      <path d="M3.8 7.5 12 12m0 0 8.2-4.5M12 12v9"/>
+    </symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10.8" cy="10.8" r="6.3"/>
+      <path d="m20 20-4.3-4.3"/>
+    </symbol>
+    <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11.5 4h-5A1.5 1.5 0 0 0 5 5.5v5c0 .4.15.78.44 1.06l8 8c.6.6 1.55.6 2.12 0l4.94-4.94c.6-.6.6-1.55 0-2.12l-8-8A1.5 1.5 0 0 0 11.5 4Z"/>
+      <circle cx="9" cy="8.5" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="icon-shuffle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 6h3.3l8.4 12H19M3.5 18h3.3l2.5-3.6M15.2 6H19"/>
+      <path d="m17 3.2 2.5 2.8L17 8.8M17 15.2l2.5 2.8-2.5 2.8"/>
+    </symbol>
+    <symbol id="icon-hourglass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6.5 3.5h11M6.5 20.5h11"/>
+      <path d="M7.5 3.5v3.2c0 1.7 1 3.3 2.6 4l1.9.9-1.9.9c-1.6.7-2.6 2.3-2.6 4v3.2M16.5 3.5v3.2c0 1.7-1 3.3-2.6 4l-1.9.9 1.9.9c1.6.7 2.6 2.3 2.6 4v3.2"/>
+    </symbol>
+    <symbol id="icon-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 4.5h11l3 3v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z"/>
+      <path d="M8 10h8M8 13.5h8M8 17h5"/>
+    </symbol>
+    <symbol id="icon-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/>
+      <path d="M3.5 4.5v4.2h4.2"/>
+      <path d="M12 7.5V12l3 2"/>
+    </symbol>
+    <symbol id="icon-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3.5h12v17l-2.2-1.5-2.2 1.5-2.1-1.5-2.1 1.5-2.2-1.5L6 20.5Z"/>
+      <path d="M9 8h6M9 11.5h6M9 15h4"/>
+    </symbol>
+    <symbol id="icon-siren" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v2M4.5 12h2M17.5 12h2M6.3 6.3l1.4 1.4M17.7 6.3l-1.4 1.4"/>
+      <path d="M8 13a4 4 0 0 1 8 0v5H8v-5Z"/>
+      <path d="M6.5 20.5h11"/>
+    </symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8.5" y="8.5" width="11" height="12" rx="1.8"/>
+      <path d="M15.5 8.5V6a1.8 1.8 0 0 0-1.8-1.8H6a1.8 1.8 0 0 0-1.8 1.8v9.7A1.8 1.8 0 0 0 6 17.5h2.5"/>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m4.5 12.5 5 5L19.5 7"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-stripe" id="modalStripe"></div>
+    <div class="modal-header">
+      <div>
+        <div class="modal-nf-num-row">
+          <div class="modal-nf-num" id="modalNfNum">NF —</div>
+          <button type="button" class="copy-btn" title="Copiar número" aria-label="Copiar número" onclick="copiarNumero(this, document.getElementById('modalNfNum').dataset.numero || '')">
+            <svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-copy"></use></svg>
+          </button>
+        </div>
+        <div class="modal-fornecedor" id="modalFornecedor">—</div>
+      </div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Login -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+
+    <aside class="login-brand">
+      <svg class="login-brand-watermark" viewBox="0 0 24 24" aria-hidden="true">
+        <use href="#icon-brand"></use>
+      </svg>
+      <div class="login-brand-logo"><svg class="icon" viewBox="0 0 24 24"><use href="#icon-brand"></use></svg></div>
+      <div>
+        <div class="login-brand-title">Conferência<br>Ordem de Compra</div>
+        <div class="login-brand-sub">Notas Fiscais × Ordens de Compra — Fiscal / Compras</div>
+      </div>
+      <div class="login-brand-foot">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#icon-shield"></use></svg>
+        Grupo Tietê · acesso interno
+      </div>
+    </aside>
+
+    <div class="login-form-panel">
+     <div class="login-form-inner">
+      <div class="login-title">Entrar</div>
+      <div class="login-sub" id="loginSub">Informe seu código de usuário pra continuar.</div>
+
+      <div class="login-steps" id="loginSteps"><i class="on"></i><i></i></div>
+
+      <div id="loginErro" class="field-erro"></div>
+
+      <!-- Passo 1: codusu -->
+      <div id="loginPassoCodusu">
+        <div class="field">
+          <label>Código de usuário</label>
+          <div class="input-wrap">
+            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span>
+            <input type="text" id="loginCodusu" autocomplete="off" placeholder="ex: 675">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="loginBtnIdentificar" style="width:100%">
+            Continuar
+            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Passo 2a: senha -->
+      <div id="loginPassoSenha" style="display:none">
+        <div class="field">
+          <label>Senha</label>
+          <div class="input-wrap">
+            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
+            <input type="password" id="loginSenha" autocomplete="off">
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" onclick="alternarSenha(this,'loginSenha')">
+              <svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-eye"></use></svg>
+            </button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="loginBtnVoltar1">
+            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-left"></use></svg>
+            Voltar
+          </button>
+          <button class="btn primary" id="loginBtnEntrar" style="flex:1">
+            Entrar
+            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Passo 2b: primeiro acesso -->
+      <div id="loginPassoCriar" style="display:none">
+        <div class="field" id="loginCampoNome">
+          <label>Seu nome</label>
+          <div class="input-wrap">
+            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span>
+            <input type="text" id="loginNome" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label>Crie uma senha</label>
+          <div class="input-wrap">
+            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
+            <input type="password" id="loginNovaSenha" autocomplete="off">
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" onclick="alternarSenha(this,'loginNovaSenha')">
+              <svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-eye"></use></svg>
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Escolha sua cor</label>
+          <div class="color-picker" id="loginCorPicker"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="loginBtnVoltar2">
+            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-left"></use></svg>
+            Voltar
+          </button>
+          <button class="btn primary" id="loginBtnCriar" style="flex:1">
+            Criar e entrar
+            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
+          </button>
+        </div>
+      </div>
+     </div>
+    </div>
+  </div>
+</div>
+
+<!-- Segurança da coluna — quem pode ver (admin) -->
+<div class="crm-overlay" id="segurancaOverlay">
+  <div class="crm-box" style="width:min(560px,100%)">
+    <div class="crm-head">
+      <div>
+        <strong style="font-size:0.88rem;display:inline-flex;align-items:center;gap:6px"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg> Quem pode ver esta coluna</strong>
+        <div style="font-size:0.66rem;color:var(--text-faint);margin-top:2px" id="segurancaColNome">—</div>
+      </div>
+      <button class="modal-close" id="segurancaClose">✕</button>
+    </div>
+    <div style="padding:12px 20px 4px;font-size:0.68rem;color:var(--text-faint)">
+      Desmarque um usuário pra esconder esta coluna dele. Admin sempre vê tudo. Aplica no próximo refresh do board desse usuário.
+    </div>
+    <div id="segurancaLista" style="padding:10px 20px 20px">
+      <div style="text-align:center;color:var(--text-faint);font-size:0.72rem;padding:16px">Carregando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Relatório de OC — escolher período (admin) -->
+<div class="crm-overlay" id="relOcOverlay">
+  <div class="crm-box" style="width:min(420px,100%)">
+    <div class="crm-head">
+      <div>
+        <strong style="font-size:0.88rem;display:inline-flex;align-items:center;gap:6px"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-file"></use></svg> Relatório de OC geradas e aprovadas</strong>
+        <div style="font-size:0.66rem;color:var(--text-faint);margin-top:2px">Escolha o período (por padrão, somente hoje).</div>
+      </div>
+      <button class="modal-close" id="relOcClose">✕</button>
+    </div>
+    <div style="padding:16px 20px 8px;display:flex;gap:12px;flex-wrap:wrap">
+      <label style="flex:1;min-width:130px;font-size:0.72rem;color:var(--text-dim)">
+        De
+        <input type="date" id="relOcDe" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);font:inherit">
+      </label>
+      <label style="flex:1;min-width:130px;font-size:0.72rem;color:var(--text-dim)">
+        Até
+        <input type="date" id="relOcAte" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);font:inherit">
+      </label>
+    </div>
+    <div style="padding:8px 20px 20px;display:flex;justify-content:flex-end">
+      <button id="relOcGerar" style="border:none;border-radius:7px;padding:9px 18px;font:inherit;font-weight:600;cursor:pointer;background:#2E5496;color:#fff">Gerar Excel</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="heading-block">
+    <div class="heading-mark">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M8.5 12.5h7M8.5 15.5h7M8.5 9.5h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Conferência <span class="accent">Ordem de Compra</span></h1>
+      <div class="subtitle">Notas Fiscais × Ordens de Compra — Fiscal / Compras</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="header-pos">
+      <button class="bell-btn" id="bellBtn"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg><span class="bell-count" id="bellCount">0</span></button>
+      <div class="bell-panel" id="bellPanel">
+        <div class="bell-panel-head">Notificações</div>
+        <div id="bellItems"></div>
+      </div>
+    </div>
+
+    <div class="user-menu" id="userMenu" style="display:none">
+      <button class="user-trigger" id="userTrigger">
+        <span class="user-avatar" id="userAvatar">?</span>
+        <span class="user-nome" id="userNome"></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="user-pop" id="userPop">
+        <div class="pop-title">Aparência</div>
+        <button class="pop-item" id="popTrocarCor"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-palette"></use></svg> Trocar minha cor</button>
+        <div class="pop-swatches" id="popMinhaCor" style="display:none"></div>
+        <button class="pop-item" id="popCorTela"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-monitor"></use></svg> Cor da tela</button>
+        <div id="popTela" style="display:none">
+          <div class="pop-sub-title">Tema</div>
+          <div class="pop-theme-row" id="popTemaRow">
+            <button type="button" data-tema="claro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-sun"></use></svg> Claro</button>
+            <button type="button" data-tema="escuro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-moon"></use></svg> Escuro</button>
+          </div>
+          <div class="pop-sub-title">Cor de destaque</div>
+          <div class="pop-swatches" id="popAccent"></div>
+        </div>
+        <div class="pop-sep"></div>
+        <button class="pop-item danger" id="popSair"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-logout"></use></svg> Sair</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="main-layout">
+
+    <!-- Sidebar (menu de navegação) -->
+  <aside class="sidebar" id="sidebar">
+
+    <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu" aria-label="Recolher menu">
+      <span class="st-ico">«</span>
+    </button>
+
+    <div class="sidebar-nav">
+      <button class="nav-item active" id="navBoard" title="Board">
+        <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg></span><span class="nav-label">Board</span>
+      </button>
+      <button class="nav-item" id="navCrm" style="display:none" title="CRM — Ranking">
+        <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-chart"></use></svg></span><span class="nav-label">CRM — Ranking</span>
+      </button>
+      <button class="nav-item" id="navRelatorioOc" style="display:none" title="Relatório de OC geradas para aprovação e aprovadas">
+        <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-file"></use></svg></span><span class="nav-label">Relatório de OC</span>
+      </button>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-alertas" id="navAlertas">
+      <button class="nav-alertas-toggle" id="alertsToggle" title="Alertas">
+        <span class="nav-ico-inline"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg></span><span class="nav-label">Alertas</span>
+        <span class="sidebar-count zero" id="alertsCount">0</span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="alerts-list" id="alertsItems">
+        <div class="alert-empty-row">Sem alertas no momento ✓</div>
+      </div>
+    </div>
+
+    <!-- Alerta destacado (só admin): OCs geradas e aprovadas há +3 dias sem fechar -->
+    <div class="nav-ocalerta" id="navOcAlerta" style="display:none">
+      <button class="nav-ocalerta-toggle" id="ocAlertaToggle"
+              title="OCs geradas e aprovadas pelo fluxo que estão há mais de 3 dias sem fechar (SITOCP 1/2/9)">
+        <span class="nav-ico-inline"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-siren"></use></svg></span><span class="nav-label">OC sem fechar +3d</span>
+        <span class="sidebar-count zero" id="ocAlertaCount">0</span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="ocalerta-list" id="ocAlertaItems">
+        <div class="alert-empty-row">Nenhuma OC nessa situação ✓</div>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <span class="pulse-dot" id="pulseDot"></span>
+      <span id="lastUpdate">carregando…</span>
+    </div>
+
+  </aside>
+
+  <!-- Board kanban -->
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+</div>
+
+<script>
+// Fluxo de 5 estágios (ver nf_processor.py): as colunas "de passagem"
+// (Verificação Cadastral, Verificação OC) normalmente ficam vazias — a NF só
+// aparece nelas se travar (erro ou caso raro), já que o processamento segue
+// direto pra próxima etapa quando dá tudo certo. As colunas de espera
+// (Aguardando Lig. / Aguard. Aprovação de OC) são reconferidas a cada 1min.
+const COLUNAS = [
+  {
+    id:"pendente-importacao-xml",
+    titulo:"NF pendente importação XML",
+    sub:"Contagem já feita, mas XML ainda não importado no SDE.",
+    cor:"#7c3aed", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-hourglass"></use></svg>',
+    acao: null,
+    descricao:"A contagem física já foi lançada no Sapiens (E440CNT), mas o XML da NF ainda não foi importado no SDE. Pré-etapa: enquanto o XML não entra, a NF nem começa o fluxo de conferência.",
+  },
+  {
+    id:"verificacao-cadastral",
+    titulo:"Verificação Cadastral",
+    sub:"Conferindo ligação produto x fornecedor.",
+    cor:"#4c8dae", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-search"></use></svg>',
+    acao: null,
+    descricao:"NF recém-recebida. O sistema confere a ligação de cada produto com o portfólio do fornecedor (E403FPR) e o cadastro de derivação/depósito. Normalmente é passagem rápida — a NF só fica visível aqui se travar.",
+  },
+  {
+    id:"aguardando-ligacao",
+    titulo:"Aguar. Cad/Lig. Produto x Fornecedor",
+    sub:"Produto sem ligação no portfólio deste fornecedor.",
+    cor:"#be185d", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg>',
+    acao: { txt:"Fiscal: cadastrar ligação no Sapiens", cls:"aguardar" },
+    descricao:"Um ou mais produtos da NF não têm ligação no portfólio deste fornecedor (ou falta derivação/vínculo de depósito). O fiscal cadastra no Sapiens; o sistema reconfere a cada 1 min e a NF segue sozinha quando resolver.",
+  },
+  {
+    id:"verificacao-oc",
+    titulo:"Verificação OC",
+    sub:"Conferindo saldo de OC item a item",
+    cor:"#0891b2", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-package"></use></svg>',
+    acao: null,
+    descricao:"O sistema procura OC aberta com saldo suficiente para cada item da NF, somando várias OCs quando preciso. Passagem rápida — a NF só aparece aqui se travar numa rodada.",
+  },
+  {
+    id:"aguardando-aprovacao-oc",
+    titulo:"Aguard. Aprovação de OC",
+    sub:"Sem saldo disponível, aguardando o comprador",
+    cor:"#d97706", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg>',
+    acao: { txt:"Comprador (Junior): criar/aprovar OC no Sapiens", cls:"aguardar" },
+    descricao:"Algum item ficou sem saldo de OC. O sistema já gerou/consolidou a OC nova via webservice; falta o comprador (Junior) aprovar no Sapiens (SITAPR='APR'). Reconferido a cada 1 min.",
+  },
+  {
+    id:"aguardando-integracao",
+    titulo:"Aguardando Integração",
+    sub:"OC com saldo disponível, NF liberada.",
+    cor:"#16a34a", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg>',
+    acao: { txt:"Fiscal: importar NF", cls:"importar" },
+    descricao:"Todos os itens da NF têm OC com saldo e a NF está marcada na E440NFC. Falta o fiscal importar a NF. Some da tela quando a integração real acontece (STANFV=3) ou quando a 2ª verificação acha o cabeçalho na E440NFC.",
+  },
+];
+
+function colunaById(id) {
+  return COLUNAS.find(c => c.id === id);
+}
+
+const INTERVALO_MS = 60000;  // colunas 2-5 (SQLite) atualizam a cada 1 min
+
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function fmt(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  return isNaN(d) ? String(v) : d.toLocaleDateString("pt-BR");
+}
+function fmtLogHora(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+function fmtValor(v) {
+  if (!v && v !== 0) return "";
+  return Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+}
+function tempoRelativo(s) {
+  if (!s) return "";
+  const h = (Date.now() - new Date(s).getTime()) / 3600000;
+  if (isNaN(h)) return "";
+  if (h < 1) return "< 1h";
+  if (h < 24) return `${Math.floor(h)}h`;
+  return `${Math.floor(h/24)}d`;
+}
+function classTempo(s) {
+  if (!s) return "";
+  const h = (Date.now() - new Date(s).getTime()) / 3600000;
+  if (h > 48) return "urgente";
+  if (h > 24) return "atencao";
+  return "";
+}
+
+const STATUS_BADGE = {
+  "VERIFICACAO_CADASTRAL":   {cls:"neutro",    label:"Verificação Cadastral"},
+  "AGUARDANDO_LIGACAO":      {cls:"cadastro",  label:"Aguardando Ligação"},
+  "VERIFICACAO_OC":          {cls:"neutro",    label:"Verificação OC"},
+  "AGUARDANDO_APROVACAO_OC": {cls:"aprovacao", label:"Aguardando Aprovação de OC"},
+  "AGUARDANDO_INTEGRACAO":   {cls:"ok",        label:"Aguardando Integração"},
+};
+// Descrição do status pra usar como tooltip (title) no card
+const STATUS_DESCRICAO = {
+  "VERIFICACAO_CADASTRAL":   "Conferindo ligação produto x fornecedor (E403FPR)",
+  "AGUARDANDO_LIGACAO":      "Produto(s) desta NF sem ligação no portfólio deste fornecedor (E403FPR) — fiscal precisa cadastrar antes de seguir",
+  "VERIFICACAO_OC":          "Conferindo saldo de OC item a item",
+  "AGUARDANDO_APROVACAO_OC": "Sem OC com saldo disponível — aguardando o comprador (Junior) criar/aprovar a OC",
+  "AGUARDANDO_INTEGRACAO":   "OC com saldo disponível encontrada — NF liberada pra importação (E440NFC.SITNFC=2)",
+};
+
+function sbadge(status) {
+  const info = STATUS_BADGE[status];
+  if (!info) return "";
+  return `<span class="sbadge ${info.cls}">${info.label}</span>`;
+}
+
+/* ── Colunas visíveis pro usuário logado ─────────────────────
+   Admin sempre vê tudo. Usuário comum só vê as colunas escolhidas pelo
+   admin no painel "🧩 Colunas" (CURRENT_USER.colunas_visiveis); null/ausente
+   = nunca configurado → vê todas (comportamento padrão, sem regressão pra
+   quem já usava o board antes dessa configuração existir). */
+function colunasPermitidas() {
+  if (!CURRENT_USER || CURRENT_USER.is_admin) return null;
+  return Array.isArray(CURRENT_USER.colunas_visiveis) ? CURRENT_USER.colunas_visiveis : null;
+}
+
+/* ── Monta colunas ────────────────────────────────────────── */
+function montarBoard() {
+  const board = document.getElementById("board");
+  const permitidas = colunasPermitidas();
+  COLUNAS.filter(col => !permitidas || permitidas.includes(col.id)).forEach(col => {
+    const el = document.createElement("div");
+    el.className = "col";
+    el.style.setProperty("--col-color", col.cor);
+    el.id = `col-${col.id}`;
+    el.innerHTML = `
+      <div class="col-head">
+        <div style="min-width:0">
+          <div class="col-top">
+            <div class="col-icon">${col.icone}</div>
+            <span class="col-title">${esc(col.titulo)}</span>
+          </div>
+          ${col.sub ? `<div class="col-sub" style="margin-left:29px">${esc(col.sub)}</div>` : ""}
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <span class="col-badge" id="cnt-${col.id}">0</span>
+          <div class="col-menu-wrap">
+            <button class="col-menu-btn" data-col-menu="${col.id}" title="Opções da coluna" aria-label="Opções da coluna">⋮</button>
+            <div class="col-pop" data-col-pop="${col.id}">
+              <button class="pop-item" data-col-acao="sobre" data-col="${col.id}"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-info"></use></svg> Sobre esta coluna</button>
+              <div class="pop-sobre">${esc(col.descricao || col.sub || "")}</div>
+              ${(CURRENT_USER && CURRENT_USER.is_admin) ? `
+              <div class="pop-sep"></div>
+              <button class="pop-item" data-col-acao="seguranca" data-col="${col.id}"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg> Segurança (quem pode ver)</button>` : ""}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="cards-${col.id}">
+        <div class="col-loading"><div class="spinner"></div></div>
+      </div>
+    `;
+    board.appendChild(el);
+  });
+}
+
+/* ── Renderiza cards ──────────────────────────────────────── */
+// Guarda o último conteúdo renderizado de cada coluna. Se os dados não
+// mudaram entre um refresh e outro, NÃO mexe no DOM — assim os cards não
+// "piscam"/recarregam por cima a cada atualização (só re-renderiza o que
+// mudou de verdade).
+const _ultimoRenderCol = {};
+
+/* Iniciais do fornecedor + cor determinística (o mesmo fornecedor sempre
+   cai na mesma cor, sem precisar guardar nada em lugar nenhum). */
+const CORES_FORNECEDOR = [
+  "#4c8dae","#7c6fcf","#16a34a","#d97706","#dc2626","#0891b2",
+  "#be185d","#65a30d","#9333ea","#0f766e","#2563eb","#ea580c",
+];
+function iniciaisFornecedor(nome) {
+  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+function corFornecedor(nome) {
+  const str = String(nome || "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return CORES_FORNECEDOR[hash % CORES_FORNECEDOR.length];
+}
+
+function renderCol(id, lista, cor, colDef) {
+  const container = document.getElementById(`cards-${id}`);
+  const cnt       = document.getElementById(`cnt-${id}`);
+  if (!container) return;
+
+  // Assinatura só dos campos que aparecem no card — se igual à anterior,
+  // pula o re-render (evita o "piscar"). datemi entra pra atualizar o
+  // tempo decorrido; o resto são os dados exibidos.
+  const assinatura = JSON.stringify(lista.map(nf => [
+    nf.numnfc, nf.nomfor, nf.vlrfin, nf.qtdite, nf.codemp, nf.codfil,
+    nf.datemi, nf._proc && nf._proc.status_interno, nf._proc && nf._proc.detalhe,
+    nf._atrib && nf._atrib.codusu,
+  ]));
+  if (_ultimoRenderCol[id] === assinatura) return;  // nada mudou → não repinta
+  _ultimoRenderCol[id] = assinatura;
+
+  cnt.textContent = lista.length;
+
+  if (!lista.length) {
+    container.innerHTML = `<div class="col-empty">Nenhuma NF nesta etapa</div>`;
+    return;
+  }
+
+  container.innerHTML = lista.map(nf => {
+    const proc    = nf._proc;
+    const tempo   = tempoRelativo(nf.datemi);
+    const tClass  = classTempo(nf.datemi);
+    const valor   = fmtValor(nf.vlrfin);
+    const itens   = nf.qtdite ?? "";
+    const bdg      = proc ? sbadge(proc.status_interno) : "";
+    const bdgTitle = proc ? (STATUS_DESCRICAO[proc.status_interno] || "") : "";
+    const datemi  = fmt(nf.datemi);
+
+    // Card atribuído (só existe na coluna Aguardando Integração) fica com a
+    // cor do usuário atribuído no lugar da cor padrão da coluna.
+    const atrib    = nf._atrib || null;
+    const corCard  = atrib ? atrib.cor : cor;
+    const chipAtrib = atrib
+      ? `<div class="nf-atribuicao-chip" style="background:${esc(atrib.cor)}22;color:${esc(atrib.cor)}"><span class="nf-atribuicao-dot" style="background:${esc(atrib.cor)}"></span>${esc(atrib.nomusu)}</div>`
+      : (colDef?.id === "aguardando-integracao"
+          ? `<div class="nf-atribuicao-chip sem-atribuicao"><svg class="icon-inline" width="11" height="11" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> NF sem usuário atribuído</div>`
+          : "");
+
+    const acaoBanner = colDef?.acao
+      ? `<div class="nf-acao ${colDef.acao.cls}">→ ${esc(colDef.acao.txt)}</div>`
+      : "";
+
+    return `
+      <div class="nf-card"
+        style="--col-color:${esc(corCard)}"
+        data-numnfc="${esc(nf.numnfc)}"
+        data-codemp="${esc(nf.codemp)}"
+        data-codfil="${esc(nf.codfil)}"
+        data-codfor="${esc(nf.codfor)}"
+        data-chvnel="${esc(nf.chvnel)}"
+        data-cgcfor="${esc(nf.cgcfor)}"
+        data-cgcfil="${esc(nf.cgcfil)}"
+        data-nomfor="${esc(nf.nomfor)}"
+        data-datemi="${esc(nf.datemi)}"
+        data-vlrfin="${esc(valor)}"
+        data-cor="${esc(corCard)}"
+        data-proc-detalhe="${esc(proc?.detalhe||'')}"
+        data-proc-referencia="${esc(JSON.stringify(proc?.referencia||{}))}"
+        data-proc-status="${esc(proc?.status_interno||'')}">
+        <div class="nf-card-top">
+          <span style="display:inline-flex;align-items:center;gap:2px;min-width:0">
+            <span class="nf-num" title="Número da NF (E000NFC.NUMNFC)">${esc(nf.numnfc)}</span>
+            <button type="button" class="copy-btn" title="Copiar número da NF" aria-label="Copiar número da NF" onclick="event.stopPropagation(); copiarNumero(this, '${esc(nf.numnfc)}')">
+              <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-copy"></use></svg>
+            </button>
+          </span>
+          ${tempo ? `<span class="nf-tempo ${tClass}" title="Tempo decorrido desde a data de emissão (E000NFC.DATEMI) — fica laranja após 24h, vermelho após 48h">${esc(tempo)}</span>` : ""}
+        </div>
+        <div class="nf-for-row" title="Fornecedor (E095FOR.NOMFOR): ${esc(nf.nomfor)}">
+          <span class="nf-for-avatar" style="background:${corFornecedor(nf.nomfor)}">${esc(iniciaisFornecedor(nf.nomfor))}</span>
+          <span class="nf-for">${esc(nf.nomfor)}</span>
+        </div>
+        <div class="nf-divider"></div>
+        <div class="nf-card-meta">
+          ${valor ? `<span class="nf-valor" title="Valor total da NF (E000NFC.VLRFIN)">${esc(valor)}</span>` : "<span></span>"}
+          <span title="${esc(bdgTitle)}">${bdg}</span>
+        </div>
+        <div class="nf-chips">
+          <!-- NOVO: empresa/filial visíveis na prévia do card (multi-empresa) -->
+          <span class="chip destaque" title="Código da empresa (E070FIL.CODEMP) / filial (E070FIL.CODFIL)"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-building"></use></svg> Emp ${esc(nf.codemp)} / Fil ${esc(nf.codfil)}</span>
+          ${datemi !== "—" ? `<span class="chip" title="Data de emissão da NF (E000NFC.DATEMI)"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-calendar"></use></svg> ${esc(datemi)}</span>` : ""}
+          ${itens ? `<span class="chip destaque" title="Quantidade de itens/linhas na NF (contagem na E000IPC)"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-package"></use></svg> ${esc(itens)} it.</span>` : ""}
+        </div>
+        ${chipAtrib}
+        ${acaoBanner}
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".nf-card").forEach(card => {
+    card.addEventListener("click", () => abrirModal(card.dataset));
+  });
+}
+
+/* ── Modal ────────────────────────────────────────────────── */
+async function abrirModal(ds) {
+  const overlay = document.getElementById("modalOverlay");
+  const stripe  = document.getElementById("modalStripe");
+  const numEl   = document.getElementById("modalNfNum");
+  const forEl   = document.getElementById("modalFornecedor");
+  const body    = document.getElementById("modalBody");
+
+  stripe.style.background = ds.cor || "#4c8dae";
+  numEl.textContent = `NF ${ds.numnfc}`;
+  numEl.dataset.numero = ds.numnfc;
+  forEl.textContent = ds.nomfor || "";
+  body.innerHTML = `
+    <div class="modal-section">
+      <div style="text-align:center;padding:20px">
+        <div class="spinner" style="--col-color:${ds.cor||'#4c8dae'}"></div>
+        <div style="font-size:0.7rem;color:var(--text-faint);margin-top:4px">Consultando OC no Sapiens…</div>
+      </div>
+    </div>`;
+  overlay.classList.add("open");
+
+  const SITAPR_INFO = {
+    APR: { cls:"ok",         label:"Aprovada pelo comprador" },
+    REP: { cls:"divergente", label:"Reprovada pelo comprador" },
+    CAN: { cls:"neutro",     label:"Cancelada" },
+    AGA: { cls:"aprovacao",  label:"Aguardando aprovação" },
+    ANA: { cls:"aprovacao",  label:"Em análise" },
+    PAS: { cls:"aprovacao",  label:"Pré-aprovada" },
+    PRE: { cls:"aprovacao",  label:"Pendente" },
+    BLO: { cls:"divergente", label:"Bloqueada" },
+  };
+  const SITOCP_INFO = {
+    1: { cls:"ok",         label:"Aberta — saldo total" },
+    2: { cls:"aprovacao",  label:"Aberta — saldo parcial" },
+    4: { cls:"neutro",     label:"Liquidado" },
+    5: { cls:"divergente", label:"Cancelada" },
+    9: { cls:"neutro",     label:"Não Fechado" },
+  };
+
+  try {
+    const payload = {
+      codemp:ds.codemp||"", codfil:ds.codfil||"", codfor:ds.codfor||"",
+      chvnel:ds.chvnel||"", cgcfor:ds.cgcfor||"", cgcfil:ds.cgcfil||"",
+    };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 65000);
+    let r;
+    try {
+      r = await fetch("/api/oc/conferir-nf", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload),
+        signal:ctrl.signal,
+      });
+    } catch(fetchErr) {
+      clearTimeout(timer);
+      body.innerHTML = `<div class="modal-section"><div style="color:#dc2626;font-size:0.74rem">Erro na requisição: ${esc(String(fetchErr))}</div></div>`;
+      return;
+    }
+    clearTimeout(timer);
+    const d = await r.json();
+
+    // Histórico de ações (nf_log_acoes) — busca em paralelo, não bloqueia
+
+    let logAcoes = [];
+    try {
+      const rLog = await fetch(`/api/oc/log/${encodeURIComponent(ds.numnfc||"")}`);
+      if (rLog.ok) logAcoes = await rLog.json();
+    } catch { /* histórico é opcional — modal segue sem ele */ }
+
+    if (d.erro || !r.ok) {
+      body.innerHTML = `
+        <div class="modal-section">
+          <div class="modal-section-title">Erro ao consultar OCs</div>
+          <div style="color:#dc2626;font-size:0.74rem;margin-bottom:8px">${esc(d.erro || "Erro desconhecido")}</div>
+          <div style="font-size:0.63rem;color:var(--text-faint)">
+            Filial: ${esc(payload.codfil||"—")} · Fornecedor: ${esc(payload.codfor||"—")}
+          </div>
+        </div>`;
+      return;
+    }
+
+    const ocs        = d.ocs_abertas || [];
+    const itens      = d.itens_nf   || [];
+    const cobertos   = itens.filter(i => i.coberto).length;
+    const divItens   = itens.length - cobertos;
+    const procDetalhe = ds.procDetalhe || "";
+    let procReferencia = {};
+    try { procReferencia = JSON.parse(ds.procReferencia || "{}"); } catch {}
+
+    let html = "";
+
+    // ── Banner de situação atual ──────────────────────────────
+    const procStatus = ds.procStatus || "";
+    const SITUACAO_MAP = {
+      "VERIFICACAO_CADASTRAL":   { cls:"info", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-search"></use></svg>', txt:"Conferindo ligação produto x fornecedor (E403FPR)" },
+      "AGUARDANDO_LIGACAO":      { cls:"warn", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg>', txt:"Produto(s) desta NF sem ligação no portfólio deste fornecedor (E403FPR) — fiscal precisa cadastrar antes de seguir" },
+      "VERIFICACAO_OC":          { cls:"info", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-package"></use></svg>', txt:"Conferindo saldo de OC item a item" },
+      "AGUARDANDO_APROVACAO_OC": { cls:"warn", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg>', txt:"Sem OC com saldo disponível para este fornecedor/produto — aguardando o comprador (Junior) criar/aprovar a OC" },
+      "AGUARDANDO_INTEGRACAO":   { cls:"ok",   icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg>', txt:"OC com saldo disponível — NF liberada para importação" },
+    };
+    const sit = SITUACAO_MAP[procStatus];
+    if (sit) {
+      html += `
+        <div class="modal-situacao ${sit.cls}">
+          <span class="modal-situacao-icon">${sit.icon}</span>
+          <span>${sit.txt}</span>
+        </div>`;
+    } else if (!d.confirmado) {
+      // TRAVA: só afirma "sem OC" depois de confirmar TODOS os itens da NF.
+      // Se os itens não foram carregados (NF sem itens na E000IPC ou join
+      // falhou), o dado está incompleto — não é o mesmo que "sem OC".
+      html += `<div class="modal-situacao erro"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Não foi possível confirmar todos os itens da NF (dados incompletos) — não é possível afirmar que está sem OC ainda${(d.itens_nao_encontrados||[]).length ? `. Item(ns) não encontrado(s): ${esc((d.itens_nao_encontrados||[]).join(", "))}` : ""}</span></div>`;
+    } else if (!d.tem_oc) {
+      html += `<div class="modal-situacao erro"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Nenhuma OC aberta encontrada para este fornecedor</span></div>`;
+
+      // DIAGNÓSTICO: se existem OCs abertas pro fornecedor mas nenhuma bateu
+      // com o(s) produto(s) da NF (nem por CODPRO nem por PROFOR), mostra
+      // essas OCs aqui — ajuda a enxergar se a OC criada manualmente existe
+      // mas com empresa/filial diferente, ou produto que não bate mesmo.
+      const ocsDebug = d.ocs_debug_fornecedor || [];
+      if (ocsDebug.length > 0) {
+        html += `
+          <div class="modal-section" style="background:#fffbeb">
+            <div class="modal-section-title" style="color:#92400e;display:flex;align-items:center;gap:5px"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-search"></use></svg> OC(s) aberta(s) para este fornecedor, mas sem produto compatível com a NF</div>
+            ${ocsDebug.map(oc => `
+              <div style="font-size:0.7rem;color:#78350f;padding:4px 0;border-bottom:1px solid #fde68a">
+                <strong>OC ${esc(oc.numocp)}</strong> (empresa ${esc(oc.codemp)}/filial ${esc(oc.codfil)}, SITOCP=${esc(oc.sitocp)}, SITAPR=${esc(oc.sitapr||"—")})
+                ${(oc.itens||[]).map(it => `
+                  <div style="padding-left:12px;font-family:var(--mono);font-size:0.65rem">
+                    codpro=${esc(it.codpro||"—")} profor=${esc(it.profor||"—")} qtdabe=${esc(it.qtdabe)}
+                  </div>`).join("")}
+              </div>`).join("")}
+          </div>`;
+      }
+    } else if (d.itens_ok) {
+      html += `<div class="modal-situacao ok"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg></span><span>Todos os itens têm cobertura nas OCs abertas</span></div>`;
+    } else {
+      html += `<div class="modal-situacao warn"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Itens da NF com divergência de quantidade nas OCs</span></div>`;
+    }
+
+        // Números de OC pendentes de aprovação (Junior) — evita caçar no
+    // histórico/log; copia direto daqui.
+    if (procStatus === "AGUARDANDO_APROVACAO_OC") {
+      const ocsPendentes = Object.entries(procReferencia)
+        .filter(([chave, val]) => chave !== "erros_webservice" && val)
+        .map(([chave, numocp]) => {
+          const label = chave === "apr" ? "OC consolidada (Juntar_OC)"
+                      : chave === "pen" ? "OC nova (OC_Pendente)"
+                      : "OC já vinculada, aguardando aprovação";
+          return { label, numocp };
+        });
+      if (ocsPendentes.length) {
+        html += `
+          <div class="modal-section" style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;margin:8px 0">
+            ${ocsPendentes.map(o => `
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.74rem;padding:4px 0">
+                <strong>${esc(o.label)}:</strong>
+                <span style="font-weight:700;font-size:0.85rem;color:#92400e">OC ${esc(String(o.numocp))}</span>
+                <span class="copy-btn" role="button" tabindex="0" title="Copiar número da OC" aria-label="Copiar número da OC" onclick="event.stopPropagation(); copiarNumero(this, '${esc(String(o.numocp))}')">
+                  <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-copy"></use></svg>
+                </span>
+              </div>`).join("")}
+          </div>`;
+      }
+    }
+
+    // NOVO: aviso de itens fora do portfólio (E403FPR) — campo novo da rota
+    const foraPortfolio = d.fora_portfolio || [];
+    if (foraPortfolio.length > 0) {
+      html += `
+        <div class="modal-section" style="background:#fdf2f8">
+          <div class="modal-section-title" style="color:#be185d;display:flex;align-items:center;gap:5px"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> Fora do portfólio do fornecedor (${foraPortfolio.length})</div>
+          ${foraPortfolio.map(it => `
+            <div style="font-size:0.72rem;color:#831843;padding:2px 0">
+              ${esc(it.despro || it.profor || "—")} <span style="color:var(--text-faint);font-family:var(--mono);font-size:0.65rem">(${esc(it.profor||"")})</span>
+            </div>`).join("")}
+        </div>`;
+    }
+
+    // ── Contadores de resumo ──────────────────────────────────
+    if (itens.length > 0) {
+      html += `
+        <div class="modal-resumo">
+          <div class="resumo-stat ok"><span class="rs-val">${cobertos}</span><span class="rs-lbl">Itens OK</span></div>
+          <div class="resumo-stat div"><span class="rs-val">${divItens}</span><span class="rs-lbl">Divergentes</span></div>
+          <div class="resumo-stat neu"><span class="rs-val">${ocs.length}</span><span class="rs-lbl">OCs Abertas</span></div>
+          ${procDetalhe ? `<div style="flex:1;min-width:140px;font-size:0.68rem;color:var(--text-faint);padding:4px 0"><strong style="color:var(--text-dim)">Último processamento:</strong><br>${esc(procDetalhe)}</div>` : ""}
+        </div>`;
+    }
+
+    // ── Informações da NF ─────────────────────────────────────
+    html += `
+      <div class="modal-section">
+        <div class="modal-section-title">Dados da Nota Fiscal</div>
+        <div class="info-grid">
+          <div class="info-item"><span class="info-label">Número da NF</span><span class="info-value">${esc(ds.numnfc)}</span></div>
+          <div class="info-item"><span class="info-label">Data de Emissão</span><span class="info-value">${esc(fmt(ds.datemi))}</span></div>
+          <div class="info-item"><span class="info-label">Valor Total</span><span class="info-value" style="color:#16a34a;font-weight:700">${esc(ds.vlrfin||"—")}</span></div>
+          <div class="info-item"><span class="info-label">Fornecedor</span><span class="info-value">${esc(ds.nomfor)}</span></div>
+          <div class="info-item"><span class="info-label">Cód. Fornecedor</span><span class="info-value" style="font-family:var(--mono);font-size:0.72rem">${esc(ds.codfor||"—")}</span></div>
+          <!-- NOVO: empresa -->
+          <div class="info-item"><span class="info-label">Empresa</span><span class="info-value" style="font-family:var(--mono);font-size:0.72rem">${esc(ds.codemp||"—")}</span></div>
+          <div class="info-item"><span class="info-label">Filial</span><span class="info-value" style="font-family:var(--mono);font-size:0.72rem">${esc(ds.codfil||"—")}</span></div>
+        </div>
+      </div>`;
+
+    // ── Itens da NF × OC ─────────────────────────────────────
+    if (itens.length > 0) {
+      html += `
+        <div class="modal-section">
+          <div class="modal-section-title">Itens da NF × Cobertura nas OCs (${itens.length} item${itens.length!==1?"s":""} — ${cobertos} OK · ${divItens} divergente${divItens!==1?"s":""})</div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:4px;padding:0 11px 6px;font-size:0.6rem;color:var(--text-faint);font-weight:600">
+            <span>Produto</span><span style="text-align:right">Qtd NF</span><span style="text-align:right">Qtd na OC</span><span></span>
+          </div>
+          ${itens.map(it => {
+            const falta = !it.coberto ? (Number(it.qtdinf||0) - Number(it.qtd_oc_disponivel||0)) : 0;
+            return `
+              <div class="item-row ${it.coberto?'':'divergente'}">
+                <div>
+                  <div class="item-prod">${esc(it.despro || it.cplipc || it.profor || "—")}</div>
+                  <!-- NOVO: seqipc — agora que a conferência é item a item, ajuda identificar qual linha da NF é essa -->
+                  <div class="item-cod">Seq ${esc(it.seqipc ?? "—")} · ${esc(String(it.codpro || it.profor || ""))}</div>
+                  ${it.consolidada
+                    ? `<div class="item-alerta consolidada"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-shuffle"></use></svg> Consolidação — ${esc(String(it.num_ocs))} OCs somam ${Number(it.qtd_oc_disponivel||0).toLocaleString("pt-BR")} un.</div>`
+                    : ""}
+                  ${!it.coberto
+                    ? (it.fora_portfolio
+                        ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> Fora do portfólio do fornecedor</div>`
+                        : (Number(it.qtd_oc_disponivel||0) === 0
+                            ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> Sem OC para este produto</div>`
+                            : `<div class="item-alerta insuf"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> Faltam ${Number(falta).toLocaleString("pt-BR")} un. na OC</div>`))
+                    : ""}
+                  <!-- Mostra TODAS as OC(s) que compõem a cobertura, com o saldo
+                       disponível de cada (o modal agora soma várias OCs). -->
+                  ${(it.ocs_cobertura || []).length > 0
+                    ? `<div style="font-size:0.6rem;color:var(--text-faint);margin-top:2px">
+                        ${it.ocs_cobertura.map(o => `OC ${esc(String(o.numocp))}${o.disponivel!=null?` (${Number(o.disponivel).toLocaleString("pt-BR")} un.)`:""}`).join(" · ")}
+                      </div>`
+                    : ""}
+                </div>
+                <div class="item-qtd">${Number(it.qtdinf ?? 0).toLocaleString("pt-BR")}</div>
+                <div class="item-oc ${it.coberto?'ok':'nok'}">${Number(it.qtd_oc_disponivel ?? 0).toLocaleString("pt-BR")}</div>
+                <span class="sbadge ${it.coberto?'ok':'divergente'}">${it.coberto?"OK":"DIV"}</span>
+              </div>`;
+          }).join("")}
+        </div>`;
+    }
+
+    // ── OCs abertas do fornecedor ─────────────────────────────
+    html += `
+      <div class="modal-section">
+        <div class="modal-section-title">OCs Abertas do Fornecedor (${ocs.length})</div>
+        ${ocs.length === 0
+          ? `<div style="font-size:0.74rem;color:#dc2626;padding:4px 0">Nenhuma OC aberta cadastrada para este fornecedor</div>`
+          : ocs.map(oc => {
+              const sitocpInfo = SITOCP_INFO[oc.sitocp] || {cls:"neutro",label:"Sit. "+oc.sitocp};
+              const sitaprInfo = SITAPR_INFO[oc.sitapr] || {cls:"neutro",label:oc.sitapr||"—"};
+              const itensOc    = oc.itens || [];
+              const totalSaldo = itensOc.reduce((s,i) => s + (Number(i.qtdabe)||0), 0);
+              const ocId       = `oc-${oc.numocp}`;
+              return `
+                <div class="oc-box">
+                  <div class="oc-box-head" onclick="const d=document.getElementById('${ocId}');d.style.display=d.style.display==='none'?'block':'none'">
+                    <span class="oc-num">OC ${esc(String(oc.numocp))}</span>
+                    <span class="oc-meta">${itensOc.length} item(ns) · saldo ${totalSaldo.toLocaleString("pt-BR")} un.</span>
+                    <div style="display:flex;gap:5px;margin-left:auto;align-items:center">
+                      <span class="sbadge ${sitocpInfo.cls}">${sitocpInfo.label}</span>
+                      <span class="sbadge ${sitaprInfo.cls}">Aprovação: ${sitaprInfo.label}</span>
+                      <span style="font-size:0.65rem;color:var(--text-faint)">▼</span>
+                    </div>
+                  </div>
+                  <div id="${ocId}" class="oc-box-body">
+                    <div class="oc-itens-header">
+                      <span>Produto</span>
+                      <span style="text-align:right">Qtd Original</span>
+                      <span style="text-align:right">Qtd Recebida</span>
+                      <span style="text-align:right">Saldo</span>
+                      <span style="text-align:right">Unid.</span>
+                    </div>
+                    ${itensOc.length === 0
+                      ? `<div style="font-size:0.7rem;color:var(--text-faint);padding:4px">Sem itens</div>`
+                      : itensOc.map(it => {
+                          const saldo = Number(it.qtdabe||0);
+                          return `
+                            <div class="oc-item-row">
+                              <div>
+                                <div style="color:var(--text);word-break:break-word">${esc(it.cplipo || it.profor || "—")}</div>
+                                <div style="font-size:0.6rem;color:var(--text-faint)">${esc(it.codpro || it.profor || "")}</div>
+                              </div>
+                              <div style="text-align:right;color:var(--text-dim)">${Number(it.qtdori||0).toLocaleString("pt-BR")}</div>
+                              <div style="text-align:right;color:var(--text-dim)">${Number(it.qtdrec||0).toLocaleString("pt-BR")}</div>
+                              <div style="text-align:right;font-weight:600;color:${saldo>0?'#7c6fcf':'var(--text-faint)'}">${saldo.toLocaleString("pt-BR")}</div>
+                              <div style="text-align:right;color:var(--text-faint)">${esc(it.unimed||"")}</div>
+                            </div>`;
+                        }).join("")
+                    }
+                  </div>
+                </div>`;
+            }).join("")
+        }
+      </div>`;
+
+    // ── Histórico de ações (nf_log_acoes) ─────────────────────
+    // Log cronológico de cada passo real da conferência — pra comparar
+    // com o que aconteceu de fato no Sapiens (Etapa 1, portfólio, item a
+    // item, notificações, monitoramento de OC pendente, liberação).
+    const ETAPA_INFO = {
+      VERIFICACAO_CADASTRAL:   { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-search"></use></svg>', cor:"#4c8dae" },
+      AGUARDANDO_LIGACAO:      { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg>', cor:"#be185d" },
+      VERIFICACAO_OC:          { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-package"></use></svg>', cor:"#0891b2" },
+      AGUARDANDO_APROVACAO_OC: { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg>', cor:"#d97706" },
+      AGUARDANDO_INTEGRACAO:   { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg>', cor:"#16a34a" },
+      NOTIFICACAO:             { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg>', cor:"#d97706" },
+      ERRO:                    { icon:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg>', cor:"#dc2626" },
+    };
+    if (logAcoes.length > 0) {
+      html += `
+    <div class="modal-section">
+          <div class="modal-section-title" style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none"
+               onclick="const l=this.nextElementSibling; const oculto=l.style.display==='none'; l.style.display=oculto?'':'none'; this.querySelector('.chev').style.transform=oculto?'rotate(0deg)':'rotate(-90deg)';">
+            <svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-history"></use></svg>
+            Histórico de ações (${logAcoes.length})
+            <span class="chev" style="margin-left:auto;transition:transform .15s">▾</span>
+          </div>
+          <div style="max-height:260px;overflow-y:auto">
+            ${logAcoes.map(l => {
+              const info = ETAPA_INFO[l.etapa] || { icon:"•", cor:"var(--text-faint)" };
+              return `
+                <div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border,#eee);font-size:0.7rem">
+                  <span style="flex-shrink:0">${info.icon}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="color:${info.cor};font-weight:600">
+                      ${esc(l.acao)}${l.seqipc ? ` <span style="font-weight:400;color:var(--text-faint)">(item ${esc(l.seqipc)})</span>` : ""}
+                    </div>
+                    ${l.detalhe ? `<div style="color:var(--text-dim);word-break:break-word">${esc(l.detalhe)}</div>` : ""}
+                  </div>
+                  <span style="flex-shrink:0;color:var(--text-faint);font-size:0.63rem;white-space:nowrap">${esc(fmtLogHora(l.criado_em))}</span>
+                </div>`;
+            }).join("")}
+          </div>
+        </div>`;
+    }
+
+    if (procStatus === "AGUARDANDO_INTEGRACAO") {
+      html += buildAtribuicaoSection(ds);
+      html += buildConferenciaSection(ds, logAcoes);
+    }
+
+    body.innerHTML = html;
+
+    if (procStatus === "AGUARDANDO_INTEGRACAO") {
+      wireAtribuicao(ds);
+      wireConferenciaIntegracao(ds, logAcoes);
+    }
+  } catch(e) {
+    body.innerHTML = `<div class="modal-section"><div style="color:#dc2626;font-size:0.74rem">Erro: ${esc(String(e))}</div></div>`;
+  }
+}
+
+/* ── Dados do servidor ────────────────────────────────────── */
+// /api/oc/processamentos devolve, por NF, a ÚLTIMA linha de nf_processamento
+// (estágio atual + dados de exibição já persistidos localmente) — é a fonte
+// das colunas 2-5. A coluna 1 (Verificação Cadastral) vem do
+// /api/nf/dashboard: só NF que ainda NÃO tem nenhuma linha aqui.
+async function buscarProcessamentos() {
+  try {
+    const r = await fetch("/api/oc/processamentos");
+    if (!r.ok) return [];
+    return await r.json();
+  } catch { return []; }
+}
+
+/* ── Visibilidade por usuário ──────────────────────────────
+   Usuário comum só pode ver as NFs atribuídas a ele mesmo (ATRIBUICOES,
+   {chvnel: {codusu,...}}); admin vê tudo, sem filtro. */
+function filtrarPorUsuario(lista) {
+  if (!CURRENT_USER || CURRENT_USER.is_admin) return lista;
+  return lista.filter(nf => {
+    const atrib = ATRIBUICOES[nf.chvnel];
+    return atrib && atrib.codusu === CURRENT_USER.codusu;
+  });
+}
+
+/* ── Alertas ─────────────────────────────────────────────── */
+function renderAlertas(aguardandoLigacao, aguardandoAprovacaoOc) {
+  const el  = document.getElementById("alertsItems");
+  const cnt = document.getElementById("alertsCount");
+
+  const itens = [
+    ...aguardandoLigacao.map(p => ({cls:"warn", txt:`NF ${p.numnfc} — Ligação Produto x Fornecedor pendente`, sub:p.nomfor ?? ""})),
+    ...aguardandoAprovacaoOc.map(p => ({cls:"warn", txt:`NF ${p.numnfc} — Aguardando aprovação de OC`, sub:p.nomfor ?? ""})),
+  ];
+
+  cnt.textContent = itens.length;
+  cnt.className   = `sidebar-count${itens.length === 0 ? " zero" : ""}`;
+
+  if (!itens.length) {
+    el.innerHTML = `<div class="alert-empty-row">Sem alertas no momento ✓</div>`;
+    return;
+  }
+
+  el.innerHTML = itens.map(i => `
+    <div class="alert-item-row ${i.cls}">
+      <span class="alert-dot"></span>
+      <div>
+        <div>${esc(i.txt)}</div>
+        ${i.sub ? `<div style="font-size:0.63rem;opacity:0.7;margin-top:1px">${esc(i.sub)}</div>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+/* ── Atualização principal ────────────────────────────────── */
+// procMap compartilhado entre os dois loops (SQLite rápido / Oracle lento).
+// A coluna 1 (Oracle) precisa dele pra saber quais NFs novas já têm registro.
+let _procMapAtual = {};
+let _vcLocalAtual = [];
+
+// ── Loop RÁPIDO (5s): colunas 2-5 vêm do SQLite (/api/oc/processamentos),
+// que responde em <1s. NÃO espera o Oracle — assim os cards que mudam de
+// etapa aparecem quase na hora.
+async function atualizarColunasLocais() {
+  try {
+    const [procList, atribuicoes] = await Promise.all([
+      buscarProcessamentos(),
+      buscarAtribuicoes(),
+    ]);
+    ATRIBUICOES = atribuicoes;
+    const procMap = {};
+    for (const p of procList) procMap[String(p.numnfc)] = p;
+
+    const aguardandoLigacao     = [];
+    const verificacaoOc         = [];
+    const aguardandoAprovacaoOc = [];
+    const aguardandoIntegracao  = [];
+    const vcLocal               = [];  // NFs travadas em VERIFICACAO_CADASTRAL
+
+    for (const proc of procList) {
+      const nfCard = {
+        numnfc:proc.numnfc, chvnel:proc.chvnel, codfor:proc.codfor,
+        codemp:proc.codemp, codfil:proc.codfil, cgcfor:proc.cgcfor,
+        cgcfil:proc.cgcfil, nomfor:proc.nomfor, datemi:proc.datemi,
+        vlrfin:proc.vlrfin, qtdite:proc.qtdite, _proc:proc,
+        _atrib: atribuicoes[proc.chvnel] || null,
+      };
+      switch (proc.status_interno) {
+        case "AGUARDANDO_LIGACAO":      aguardandoLigacao.push(nfCard); break;
+        case "VERIFICACAO_OC":          verificacaoOc.push(nfCard); break;
+        case "AGUARDANDO_APROVACAO_OC": aguardandoAprovacaoOc.push(nfCard); break;
+        case "AGUARDANDO_INTEGRACAO":   aguardandoIntegracao.push(nfCard); break;
+        case "VERIFICACAO_CADASTRAL":   vcLocal.push(nfCard); break;
+      }
+    }
+
+    const aguardandoLigacaoVis     = filtrarPorUsuario(aguardandoLigacao);
+    const verificacaoOcVis         = filtrarPorUsuario(verificacaoOc);
+    const aguardandoAprovacaoOcVis = filtrarPorUsuario(aguardandoAprovacaoOc);
+    const aguardandoIntegracaoVis  = filtrarPorUsuario(aguardandoIntegracao);
+    const vcLocalVis               = filtrarPorUsuario(vcLocal);
+
+    renderCol("aguardando-ligacao",      aguardandoLigacaoVis,      "#be185d", colunaById("aguardando-ligacao"));
+    renderCol("verificacao-oc",          verificacaoOcVis,          "#0891b2", colunaById("verificacao-oc"));
+    renderCol("aguardando-aprovacao-oc", aguardandoAprovacaoOcVis,  "#d97706", colunaById("aguardando-aprovacao-oc"));
+    renderCol("aguardando-integracao",   aguardandoIntegracaoVis,   "#16a34a", colunaById("aguardando-integracao"));
+
+    // Alertas na sidebar seguem a mesma visibilidade de coluna do board —
+    // sem isso, um usuário sem acesso à coluna "Aguardando Ligação" ainda
+    // veria alertas sobre ela na lateral.
+    const permitidas = colunasPermitidas();
+    renderAlertas(
+      (!permitidas || permitidas.includes("aguardando-ligacao"))      ? aguardandoLigacaoVis     : [],
+      (!permitidas || permitidas.includes("aguardando-aprovacao-oc")) ? aguardandoAprovacaoOcVis : [],
+    );
+
+    _procMapAtual = procMap;
+    _vcLocalAtual = vcLocalVis;
+
+    document.getElementById("lastUpdate").textContent =
+      `atualizado às ${new Date().toLocaleTimeString("pt-BR")}`;
+    document.getElementById("pulseDot").classList.remove("stale");
+  } catch(err) {
+    console.error("SQLite (colunas 2-5) falhou:", err);
+    document.getElementById("pulseDot").classList.add("stale");
+  }
+}
+
+// ── Loop LENTO (Oracle): coluna 1 (Verificação Cadastral = NF nova do Oracle
+// que ainda não tem registro local). O SELECT das 14 empresas leva ~15s,
+// então roda espaçado e NÃO bloqueia as colunas 2-5.
+async function atualizarColunaNovas() {
+  try {
+    // Busca o dashboard (Oracle) E o procMap FRESCO juntos — não usa o
+    // _procMapAtual (que pode estar velho por causa dos dois loops
+    // independentes). Assim uma NF já processada (que ainda vem no
+    // /api/nf/dashboard) é corretamente excluída da coluna 1, em vez de
+    // aparecer aqui por um descompasso de timing.
+    const [resp, procList] = await Promise.all([
+      fetch("/api/nf/dashboard", { method:"POST" }),
+      buscarProcessamentos(),
+    ]);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (data.erro) throw new Error(data.erro);
+
+    const procMap = {};
+    for (const p of procList) procMap[String(p.numnfc)] = p;
+    const vcLocal = procList
+      .filter(p => p.status_interno === "VERIFICACAO_CADASTRAL")
+      .map(p => ({
+        numnfc:p.numnfc, chvnel:p.chvnel, codfor:p.codfor, codemp:p.codemp,
+        codfil:p.codfil, cgcfor:p.cgcfor, cgcfil:p.cgcfil, nomfor:p.nomfor,
+        datemi:p.datemi, vlrfin:p.vlrfin, qtdite:p.qtdite, _proc:p,
+      }));
+    // Só entra na coluna 1 quem NÃO tem registro local em NENHUM estágio.
+    const novas = (data.nfs || []).filter(nf => !procMap[String(nf.numnfc)]);
+    renderCol("verificacao-cadastral", filtrarPorUsuario(novas.concat(vcLocal)), "#4c8dae", colunaById("verificacao-cadastral"));
+  } catch(err) {
+    console.error("dashboard (Oracle, coluna 1) falhou/lento:", err);
+    // Falha do Oracle não derruba o resto — mostra ao menos as travadas locais.
+    // _vcLocalAtual já sai filtrado por usuário (guardado em atualizarColunasLocais).
+    renderCol("verificacao-cadastral", _vcLocalAtual, "#4c8dae", colunaById("verificacao-cadastral"));
+  }
+}
+
+// ── Coluna "NF pendente importação XML" — Oracle (E440CNT), independente do
+// pipeline local (não tem chvnel/proc/status_interno, só numcnt/obscnt) —
+// por isso não usa renderCol/nf-card padrão, tem sua própria renderização.
+let _ultimoRenderPendenteXml = null;
+async function atualizarColunaPendenteXml() {
+  try {
+    const r = await fetch("/api/nf/pendente-importacao-xml");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (data.erro) throw new Error(data.erro);
+    renderColPendenteXml(data.itens || []);
+  } catch(err) {
+    console.error("pendente-importacao-xml falhou:", err);
+  }
+}
+
+function renderColPendenteXml(itens) {
+  const container = document.getElementById("cards-pendente-importacao-xml");
+  const cnt       = document.getElementById("cnt-pendente-importacao-xml");
+  if (!container) return;
+
+  const assinatura = JSON.stringify(itens.map(i => [i.numcnt, i.obscnt]));
+  if (_ultimoRenderPendenteXml === assinatura) return;
+  _ultimoRenderPendenteXml = assinatura;
+
+  cnt.textContent = itens.length;
+
+  if (!itens.length) {
+    container.innerHTML = `<div class="col-empty">Nenhuma NF nesta etapa</div>`;
+    return;
+  }
+
+  container.innerHTML = itens.map(i => `
+    <div class="nf-card" style="--col-color:#7c3aed"
+      data-numcnt="${esc(i.numcnt)}"
+      data-obscnt="${esc(i.obscnt)}">
+      <div class="nf-card-top">
+        <span class="nf-num" title="Número da contagem (E440CNT.NUMCNT)">Contagem ${esc(i.numcnt)}</span>
+      </div>
+      <div class="nf-divider"></div>
+      <div class="nf-chips">
+        <span class="chip" title="E440CNT.OBSCNT"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-note"></use></svg> ${esc(i.obscnt)}</span>
+      </div>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".nf-card").forEach(card => {
+    card.addEventListener("click", () => abrirModalPendenteXml(card.dataset));
+  });
+}
+
+/* Modal simplificado pra essa coluna — a NF ainda nem existe em E000NFC
+   (por isso o XML não importou), então não há chvnel/codemp/OC pra
+   consultar: mostra só o que o próprio select (E440CNT) devolveu. */
+function abrirModalPendenteXml(ds) {
+  const overlay = document.getElementById("modalOverlay");
+  const stripe  = document.getElementById("modalStripe");
+  const numEl   = document.getElementById("modalNfNum");
+  const forEl   = document.getElementById("modalFornecedor");
+  const body    = document.getElementById("modalBody");
+
+  stripe.style.background = "#7c3aed";
+  numEl.textContent = `Contagem ${ds.numcnt}`;
+  numEl.dataset.numero = ds.numcnt;
+  forEl.textContent = "NF pendente importação XML";
+  body.innerHTML = `
+    <div class="modal-situacao warn">
+      <span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-hourglass"></use></svg></span>
+      <span>Contagem já feita, mas o XML desta NF ainda não foi importado no SDE — sem correspondência em E000NFC nos últimos 60 dias.</span>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">Dados da Contagem</div>
+      <div class="info-grid">
+        <div class="info-item"><span class="info-label">Número da Contagem</span><span class="info-value">${esc(ds.numcnt)}</span></div>
+        <div class="info-item"><span class="info-label">Observação (E440CNT.OBSCNT)</span><span class="info-value">${esc(ds.obscnt)}</span></div>
+      </div>
+    </div>`;
+  overlay.classList.add("open");
+}
+
+/* Init — DOIS loops independentes (setTimeout recursivo, não setInterval:
+   só agenda o próximo DEPOIS que o atual termina, sem empilhar requests):
+
+   • Loop rápido (1 min): colunas 2-5, do SQLite (<1s). É o que faz o card
+     pular de coluna quase na hora quando muda de etapa.
+   • Loop lento (1 min):  coluna 1, do Oracle (SELECT das empresas, ~15s).
+     Mesmo intervalo do backend (scheduler_nf, também 1 min), pra não ficar
+     a tela atrasada em relação ao que o scheduler já processou. */
+const INTERVALO_ORACLE_MS = 60000;  // coluna 1 (Oracle) também a cada 1 min
+
+async function loopLocais() {
+  await atualizarColunasLocais();
+  setTimeout(loopLocais, INTERVALO_MS);
+}
+async function loopNovas() {
+  await atualizarColunaNovas();
+  await atualizarColunaPendenteXml();
+  setTimeout(loopNovas, INTERVALO_ORACLE_MS);
+}
+
+document.getElementById("modalClose").onclick = () =>
+  document.getElementById("modalOverlay").classList.remove("open");
+document.getElementById("modalOverlay").onclick = e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   LOGIN / USUÁRIOS / ATRIBUIÇÃO / NOTIFICAÇÕES / CRM — funcionalidade
+   nova, sem nenhuma relação com a lógica de conferência acima. O board
+   só é montado e os loops só começam DEPOIS do login (ver verificarAuth
+   no fim do arquivo).
+   ═══════════════════════════════════════════════════════════════════ */
+
+let CURRENT_USER  = null;
+let ATRIBUICOES   = {};   // {chvnel: {codusu, nomusu, cor}} — atribuições vigentes
+let _appIniciado  = false;
+
+const PALETA_CORES = [
+  "#4c8dae","#7c6fcf","#16a34a","#d97706","#dc2626","#0891b2","#be185d","#65a30d","#9333ea","#0f766e",
+  "#2563eb","#0d9488","#ca8a04","#ea580c","#e11d48","#c026d3","#7c3aed","#4f46e5","#059669","#84cc16",
+  "#f43f5e","#14b8a6","#a16207","#b91c1c","#475569",
+];
+
+/* ── Lê a resposta como JSON com segurança — se vier HTML (404/500,
+   servidor não reiniciado, sessão caiu) não estoura "Unexpected token '<'". */
+async function lerJsonSeguro(r) {
+  const txt = await r.text();
+  try { return { ok: r.ok, data: JSON.parse(txt) }; }
+  catch {
+    return { ok: false, data: { erro:
+      r.status === 404 ? "Rota não encontrada — reinicie o servidor Flask."
+      : r.status === 401 ? "Sessão expirada — faça login de novo."
+      : `Resposta inesperada do servidor (HTTP ${r.status}).` } };
+  }
+}
+
+/* ── Cor da tela: tema (claro/escuro) + cor de destaque (accent) ──────
+   Só estética. Guardado no navegador (localStorage) — preferência de
+   visualização, não vai pro servidor. */
+const ACCENTS = [
+  { nome:"Azul → Roxo (padrão)", c1:"#4c8dae", c2:"#7c6fcf" },
+  { nome:"Azul",                 c1:"#2563eb", c2:"#3b82f6" },
+  { nome:"Petróleo",             c1:"#0e7490", c2:"#0891b2" },
+  { nome:"Ciano",                c1:"#0891b2", c2:"#22d3ee" },
+  { nome:"Verde",                c1:"#15803d", c2:"#16a34a" },
+  { nome:"Lima",                 c1:"#4d7c0f", c2:"#84cc16" },
+  { nome:"Âmbar",                c1:"#b45309", c2:"#d97706" },
+  { nome:"Laranja",              c1:"#c2410c", c2:"#f97316" },
+  { nome:"Vermelho",             c1:"#b91c1c", c2:"#ef4444" },
+  { nome:"Rosa",                 c1:"#9d174d", c2:"#db2777" },
+  { nome:"Fúcsia",               c1:"#a21caf", c2:"#d946ef" },
+  { nome:"Roxo",                 c1:"#6d28d9", c2:"#8b5cf6" },
+  { nome:"Índigo",               c1:"#4338ca", c2:"#6366f1" },
+  { nome:"Esmeralda",            c1:"#047857", c2:"#10b981" },
+  { nome:"Grafite",              c1:"#334155", c2:"#64748b" },
+];
+const ACCENT_KEY = "conf_oc_accent";
+const TEMA_KEY   = "conf_oc_tema";
+
+function aplicarAccent(c1, c2) {
+  const r = document.documentElement.style;
+  r.setProperty("--accent-1", c1);
+  r.setProperty("--accent-2", c2);
+  r.setProperty("--accent-solid", c1);
+  r.setProperty("--accent-grad", `linear-gradient(135deg, ${c1}, ${c2})`);
+}
+function carregarAccentSalvo() {
+  try {
+    const s = JSON.parse(localStorage.getItem(ACCENT_KEY) || "null");
+    if (s && s.c1 && s.c2) aplicarAccent(s.c1, s.c2);
+  } catch {}
+}
+function salvarAccent(c1, c2) {
+  try { localStorage.setItem(ACCENT_KEY, JSON.stringify({c1, c2})); } catch {}
+  aplicarAccent(c1, c2);
+}
+function temaAtual() {
+  try { return localStorage.getItem(TEMA_KEY) === "escuro" ? "escuro" : "claro"; } catch { return "claro"; }
+}
+function aplicarTema(t) {
+  document.documentElement.setAttribute("data-theme", t === "escuro" ? "dark" : "light");
+  try { localStorage.setItem(TEMA_KEY, t === "escuro" ? "escuro" : "claro"); } catch {}
+}
+carregarAccentSalvo();
+aplicarTema(temaAtual());
+
+/* Iniciais do nome pro avatar (1ª letra do 1º nome + 1ª do último). */
+function iniciais(nome, codusu) {
+  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return String(codusu || "?").slice(0, 2).toUpperCase();
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+
+/* ── Login ───────────────────────────────────────────────── */
+function montarColorPicker() {
+  const el = document.getElementById("loginCorPicker");
+  el.innerHTML = PALETA_CORES.map(c => `<div class="color-dot" style="background:${c}" data-cor="${c}"></div>`).join("");
+  el.querySelectorAll(".color-dot").forEach(d => {
+    d.addEventListener("click", () => {
+      el.querySelectorAll(".color-dot").forEach(x => x.classList.remove("selected"));
+      d.classList.add("selected");
+    });
+  });
+}
+function corSelecionada() {
+  const sel = document.querySelector("#loginCorPicker .color-dot.selected");
+  return sel ? sel.dataset.cor : null;
+}
+function mostrarLogin() { document.getElementById("loginOverlay").classList.add("open"); }
+function esconderLogin() { document.getElementById("loginOverlay").classList.remove("open"); }
+function loginErro(msg) { document.getElementById("loginErro").textContent = msg || ""; }
+
+/* Alterna a visibilidade da senha e troca o ícone (olho / olho riscado). */
+function alternarSenha(botao, inputId) {
+  const input = document.getElementById(inputId);
+  const vaiMostrar = input.type === "password";
+  input.type = vaiMostrar ? "text" : "password";
+  botao.querySelector("use").setAttribute("href", vaiMostrar ? "#icon-eye-off" : "#icon-eye");
+  botao.setAttribute("aria-label", vaiMostrar ? "Ocultar senha" : "Mostrar senha");
+}
+
+/* Copia um número (NF/OC/contagem) pra área de transferência e pisca um
+   check verde no botão como feedback. Funciona tanto em contexto seguro
+   (clipboard API) quanto no fallback antigo (execCommand). */
+function copiarNumero(botao, valor) {
+  const texto = String(valor ?? "");
+  if (!texto) return;
+  const aplicarFeedback = () => {
+    const use = botao.querySelector("use");
+    use.setAttribute("href", "#icon-check");
+    botao.classList.add("copiado");
+    setTimeout(() => {
+      use.setAttribute("href", "#icon-copy");
+      botao.classList.remove("copiado");
+    }, 1300);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(aplicarFeedback).catch(() => {});
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = texto;
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); aplicarFeedback(); } catch (e) {}
+    ta.remove();
+  }
+}
+
+function irParaPassoCodusu() {
+  document.getElementById("loginPassoCodusu").style.display = "";
+  document.getElementById("loginPassoSenha").style.display  = "none";
+  document.getElementById("loginPassoCriar").style.display  = "none";
+  document.getElementById("loginSteps").innerHTML = '<i class="on"></i><i></i>';
+  loginErro("");
+}
+
+document.getElementById("loginBtnIdentificar").addEventListener("click", async () => {
+  const codusu = document.getElementById("loginCodusu").value.trim();
+  if (!codusu) { loginErro("Informe o código de usuário."); return; }
+  loginErro("");
+  try {
+    const r = await fetch("/api/auth/identificar", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({codusu}),
+    });
+    const d = await r.json();
+    if (!r.ok) { loginErro(d.erro || "Erro."); return; }
+    document.getElementById("loginPassoCodusu").style.display = "none";
+    if (d.existe && !d.precisa_criar_senha) {
+      document.getElementById("loginPassoSenha").style.display = "";
+      document.getElementById("loginSenha").value = "";
+      document.getElementById("loginSenha").focus();
+      document.getElementById("loginSteps").innerHTML = '<i class="on"></i><i class="on"></i>';
+    } else {
+      // primeiro acesso: se o codusu já existe (foi atribuído por um admin
+      // antes de logar alguma vez), não pede nome de novo
+      document.getElementById("loginCampoNome").style.display = d.existe ? "none" : "";
+      document.getElementById("loginPassoCriar").style.display = "";
+      montarColorPicker();
+    }
+  } catch(e) { loginErro("Falha na conexão."); }
+});
+
+document.getElementById("loginBtnVoltar1").addEventListener("click", irParaPassoCodusu);
+document.getElementById("loginBtnVoltar2").addEventListener("click", irParaPassoCodusu);
+
+document.getElementById("loginBtnEntrar").addEventListener("click", async () => {
+  const codusu = document.getElementById("loginCodusu").value.trim();
+  const senha  = document.getElementById("loginSenha").value;
+  if (!senha) { loginErro("Informe a senha."); return; }
+  try {
+    const r = await fetch("/api/auth/login", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({codusu, senha}),
+    });
+    const d = await r.json();
+    if (!r.ok) { loginErro(d.erro || "Login inválido."); return; }
+    aoLogar(d);
+  } catch(e) { loginErro("Falha na conexão."); }
+});
+
+document.getElementById("loginBtnCriar").addEventListener("click", async () => {
+  const codusu = document.getElementById("loginCodusu").value.trim();
+  const nomusu = document.getElementById("loginNome").value.trim();
+  const senha  = document.getElementById("loginNovaSenha").value;
+  const cor    = corSelecionada();
+  if (!senha || senha.length < 4) { loginErro("Senha muito curta (mínimo 4 caracteres)."); return; }
+  if (!cor) { loginErro("Escolha uma cor."); return; }
+  if (document.getElementById("loginCampoNome").style.display !== "none" && !nomusu) { loginErro("Informe seu nome."); return; }
+  try {
+    const r = await fetch("/api/auth/criar-senha", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({codusu, nomusu, senha, cor}),
+    });
+    const d = await r.json();
+    if (!r.ok) { loginErro(d.erro || "Erro."); return; }
+    aoLogar(d);
+  } catch(e) { loginErro("Falha na conexão."); }
+});
+
+// Enter em qualquer campo do login aciona o botão principal daquele passo
+// (Continuar / Entrar / Criar e entrar), sem precisar clicar.
+function ligarEnter(inputId, botaoId) {
+  document.getElementById(inputId).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById(botaoId).click();
+    }
+  });
+}
+ligarEnter("loginCodusu",    "loginBtnIdentificar");
+ligarEnter("loginSenha",     "loginBtnEntrar");
+ligarEnter("loginNome",      "loginBtnCriar");
+ligarEnter("loginNovaSenha", "loginBtnCriar");
+
+/* ── Menu do usuário (avatar + dropdown) ──────────────────── */
+function fecharUserPop() {
+  document.getElementById("userPop").classList.remove("open");
+  document.getElementById("popMinhaCor").style.display = "none";
+  document.getElementById("popTela").style.display = "none";
+}
+function pintarUserAvatar() {
+  if (!CURRENT_USER) return;
+  const av = document.getElementById("userAvatar");
+  av.textContent = iniciais(CURRENT_USER.nomusu, CURRENT_USER.codusu);
+  av.style.background = CURRENT_USER.cor || "var(--accent-solid)";
+}
+
+document.getElementById("userTrigger").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const pop = document.getElementById("userPop");
+  const abrir = !pop.classList.contains("open");
+  fecharUserPop();
+  if (abrir) {
+    pop.classList.add("open");
+    renderMinhaCorSwatches();
+    renderTemaBotoes();
+    renderAccentSwatches();
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#userMenu")) fecharUserPop();
+});
+
+document.getElementById("popTrocarCor").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const box = document.getElementById("popMinhaCor");
+  box.style.display = box.style.display === "none" ? "flex" : "none";
+  document.getElementById("popTela").style.display = "none";
+});
+document.getElementById("popCorTela").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const box = document.getElementById("popTela");
+  box.style.display = box.style.display === "none" ? "block" : "none";
+  document.getElementById("popMinhaCor").style.display = "none";
+});
+document.getElementById("popSair").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", {method:"POST"});
+  location.reload();
+});
+
+document.getElementById("popTemaRow").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tema]");
+  if (!b) return;
+  e.stopPropagation();
+  aplicarTema(b.dataset.tema);
+  renderTemaBotoes();
+});
+function renderTemaBotoes() {
+  const atual = temaAtual();
+  document.querySelectorAll("#popTemaRow [data-tema]").forEach(b => {
+    b.classList.toggle("sel", b.dataset.tema === atual);
+  });
+}
+
+function renderMinhaCorSwatches() {
+  const el = document.getElementById("popMinhaCor");
+  el.innerHTML = PALETA_CORES.map(c =>
+    `<div class="pop-swatch${CURRENT_USER && CURRENT_USER.cor === c ? " sel" : ""}" style="background:${c}" data-cor="${c}"></div>`
+  ).join("");
+  el.querySelectorAll(".pop-swatch").forEach(d => {
+    d.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const cor = d.dataset.cor;
+      try {
+        const r = await fetch("/api/auth/cor", {
+          method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({cor}),
+        });
+        const { ok, data } = await lerJsonSeguro(r);
+        if (!ok) { alert(data.erro || "Erro ao trocar a cor."); return; }
+        CURRENT_USER.cor = data.cor;
+        pintarUserAvatar();
+        renderMinhaCorSwatches();
+      } catch(err) { alert("Falha ao trocar a cor: " + err); }
+    });
+  });
+}
+function renderAccentSwatches() {
+  const el = document.getElementById("popAccent");
+  let atual = null;
+  try { atual = JSON.parse(localStorage.getItem(ACCENT_KEY) || "null"); } catch {}
+  el.innerHTML = ACCENTS.map(a => {
+    const sel = atual ? (atual.c1 === a.c1 && atual.c2 === a.c2) : (a.c1 === "#4c8dae");
+    return `<div class="pop-swatch${sel ? " sel" : ""}" title="${esc(a.nome)}"
+      style="background:linear-gradient(135deg,${a.c1},${a.c2})" data-c1="${a.c1}" data-c2="${a.c2}"></div>`;
+  }).join("");
+  el.querySelectorAll(".pop-swatch").forEach(d => {
+    d.addEventListener("click", (e) => {
+      e.stopPropagation();
+      salvarAccent(d.dataset.c1, d.dataset.c2);
+      renderAccentSwatches();
+    });
+  });
+}
+
+function aoLogar(usuario) {
+  CURRENT_USER = usuario;
+  esconderLogin();
+  document.getElementById("userMenu").style.display = "";
+  document.getElementById("userNome").textContent = usuario.nomusu || usuario.codusu;
+  pintarUserAvatar();
+  document.getElementById("navCrm").style.display = usuario.is_admin ? "" : "none";
+    document.getElementById("navRelatorioOc").style.display = usuario.is_admin ? "" : "none";
+  iniciarAposLogin();
+}
+
+function iniciarAposLogin() {
+  if (_appIniciado) return;
+  _appIniciado = true;
+  montarBoard();
+  loopLocais();
+  loopNovas();
+  loopNotificacoes();
+  loopOcAlerta();
+}
+
+async function verificarAuth() {
+  try {
+    const r = await fetch("/api/auth/me");
+    const d = await r.json();
+    if (d.autenticado) aoLogar(d);
+    else mostrarLogin();
+  } catch(e) { mostrarLogin(); }
+}
+
+/* ── Notificações (sino) ─────────────────────────────────── */
+async function atualizarNotificacoes() {
+  try {
+    const r = await fetch("/api/notificacoes");
+    if (!r.ok) return;
+    renderBell(await r.json());
+  } catch {}
+}
+async function loopNotificacoes() {
+  await atualizarNotificacoes();
+  setTimeout(loopNotificacoes, 30000);
+}
+function renderBell(d) {
+  const cnt = document.getElementById("bellCount");
+  cnt.textContent = d.nao_lidas;
+  cnt.classList.toggle("show", d.nao_lidas > 0);
+  const el = document.getElementById("bellItems");
+  if (!d.itens.length) {
+    el.innerHTML = `<div class="bell-empty">Nenhuma notificação</div>`;
+    return;
+  }
+  el.innerHTML = d.itens.map(n => `
+    <div class="bell-item ${n.lida ? "" : "unread"}">
+      <div>${esc(n.mensagem)}</div>
+      <div class="bell-item-time">${esc(fmtLogHora(n.criado_em))}</div>
+    </div>`).join("");
+}
+document.getElementById("bellBtn").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById("bellPanel");
+  const vaiAbrir = !panel.classList.contains("open");
+  panel.classList.toggle("open", vaiAbrir);
+  if (vaiAbrir) {
+    await fetch("/api/notificacoes/marcar-lidas", {method:"POST"});
+    await atualizarNotificacoes();
+  }
+});
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("bellPanel");
+  if (panel.classList.contains("open") && !panel.contains(e.target) && e.target.id !== "bellBtn") {
+    panel.classList.remove("open");
+  }
+});
+
+/* ── Atribuição de NF (dentro do modal, coluna Aguardando Integração) ─ */
+async function buscarAtribuicoes() {
+  try {
+    const r = await fetch("/api/nf/atribuicoes");
+    if (!r.ok) return {};
+    return await r.json();
+  } catch { return {}; }
+}
+
+function buildAtribuicaoSection(ds) {
+  const atrib = ATRIBUICOES[ds.chvnel] || null;
+  const ehAdmin = !!(CURRENT_USER && CURRENT_USER.is_admin);
+  let html = `<div class="modal-section"><div class="modal-section-title" style="display:flex;align-items:center;gap:5px"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-user"></use></svg> Atribuição</div>`;
+  html += atrib
+    ? `<div class="nf-atribuicao-chip" style="background:${esc(atrib.cor)}22"><span class="nf-atribuicao-dot" style="background:${esc(atrib.cor)}"></span>Atribuída a ${esc(atrib.nomusu)}</div>`
+    : `<div class="nf-atribuicao-chip sem-atribuicao"><svg class="icon-inline" width="11" height="11" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> NF sem usuário atribuído</div>`;
+  if (ehAdmin) {
+    html += `
+      <div class="btn-row" style="margin-top:10px">
+        <select id="atribuirSelect" style="padding:7px 9px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:0.74rem;background:var(--bg-subtle)">
+          <option value="">Selecione um usuário…</option>
+        </select>
+        <button class="btn sm primary" id="atribuirBtn">Atribuir</button>
+        ${atrib ? `<button class="btn sm danger" id="desatribuirBtn">Desatribuir</button>` : ""}
+      </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+async function wireAtribuicao(ds) {
+  const select = document.getElementById("atribuirSelect");
+  if (select) {
+    try {
+      const r = await fetch("/api/usuarios");
+      if (r.ok) {
+        const usuarios = await r.json();
+        select.innerHTML = `<option value="">Selecione um usuário…</option>` +
+          usuarios.map(u => `<option value="${esc(u.codusu)}">${esc(u.nomusu)}</option>`).join("");
+      }
+    } catch {}
+  }
+  const btnAtribuir = document.getElementById("atribuirBtn");
+  if (btnAtribuir) {
+    btnAtribuir.addEventListener("click", async () => {
+      const codusu = select.value;
+      if (!codusu) { alert("Selecione um usuário."); return; }
+      btnAtribuir.disabled = true;
+      try {
+        const r = await fetch("/api/nf/atribuir", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({chvnel: ds.chvnel, numnfc: ds.numnfc, codusu}),
+        });
+        const d = await r.json();
+        if (!r.ok) { alert(d.erro || "Erro ao atribuir."); btnAtribuir.disabled = false; return; }
+        ATRIBUICOES[ds.chvnel] = d;
+        abrirModal(ds);
+        atualizarColunasLocais();
+      } catch(e) { alert("Falha: " + e); btnAtribuir.disabled = false; }
+    });
+  }
+  const btnDesatribuir = document.getElementById("desatribuirBtn");
+  if (btnDesatribuir) {
+    btnDesatribuir.addEventListener("click", async () => {
+      btnDesatribuir.disabled = true;
+      try {
+        await fetch("/api/nf/desatribuir", {
+          method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({chvnel: ds.chvnel}),
+        });
+        delete ATRIBUICOES[ds.chvnel];
+        abrirModal(ds);
+        atualizarColunasLocais();
+      } catch(e) { alert("Falha: " + e); btnDesatribuir.disabled = false; }
+    });
+  }
+}
+
+/* ── Conferência de integração (SELECT + confirmação + UPDATE) ─────── */
+// Mesmo texto gravado pelo backend em nf_log_acoes (app.py,
+// ACAO_CONFERENCIA_INTEGRACAO) — usado aqui só pra checar, pelo histórico já
+// carregado (logAcoes), se essa NF já foi confirmada antes. Sem essa checagem,
+// reabrir o modal de uma NF já confirmada dispararia um novo UPDATE no Sapiens
+// e um novo registro de log a cada vez (a NF só some da coluna quando o
+// Sapiens processa a importação, não na hora da confirmação).
+const ACAO_CONFERENCIA_INTEGRACAO = "Conferência de integração confirmada";
+
+function buildConferenciaSection(ds, logAcoes) {
+  const atrib = ATRIBUICOES[ds.chvnel] || null;
+  const podeConferir  = !!(CURRENT_USER && (CURRENT_USER.is_admin || (atrib && atrib.codusu === CURRENT_USER.codusu)));
+  const jaConfirmada  = logAcoes.some(l => l.acao === ACAO_CONFERENCIA_INTEGRACAO);
+  let corpo;
+  if (jaConfirmada) {
+    corpo = `<div class="modal-situacao ok"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg></span><span>Conferência já confirmada — ver histórico de ações acima.</span></div>`;
+  } else if (!podeConferir) {
+    corpo = `<div style="font-size:0.7rem;color:var(--text-faint)">Disponível só para o admin ou o usuário a quem esta NF estiver atribuída.</div>`;
+  } else {
+    corpo = `<div style="font-size:0.72rem;color:var(--text-faint)">Rodando conferência…</div>`;
+  }
+  return `
+    <div class="modal-section">
+      <div class="modal-section-title" style="display:flex;align-items:center;gap:5px"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-receipt"></use></svg> Conferência de integração</div>
+      <div id="confIntegracaoArea">${corpo}</div>
+    </div>`;
+}
+
+// Roda a conferência e já confirma sozinho, sem clique — só entra aqui se
+// ainda não tiver sido confirmada (ver jaConfirmada acima) e o usuário puder
+// conferir esta NF. Se algum item ainda não tem cadastro fiscal completo,
+// mostra o aviso e para: confirmar_conferencia_integracao trava mesmo nesse
+// caso (nunca grava parcial) — reabrir o modal mais tarde tenta de novo.
+async function wireConferenciaIntegracao(ds, logAcoes) {
+  const atrib = ATRIBUICOES[ds.chvnel] || null;
+  const podeConferir = !!(CURRENT_USER && (CURRENT_USER.is_admin || (atrib && atrib.codusu === CURRENT_USER.codusu)));
+  const jaConfirmada = logAcoes.some(l => l.acao === ACAO_CONFERENCIA_INTEGRACAO);
+  if (!podeConferir || jaConfirmada) return;
+
+  const area = document.getElementById("confIntegracaoArea");
+  try {
+    const params = new URLSearchParams({chvnel: ds.chvnel||"", cgcfor: ds.cgcfor||"", cgcfil: ds.cgcfil||""});
+    const r = await fetch(`/api/oc/conferencia-integracao?${params}`);
+    const d = await r.json();
+    if (!r.ok) { area.innerHTML = `<div style="color:#dc2626;font-size:0.72rem">${esc(d.erro || "Erro.")}</div>`; return; }
+
+    if (!d.completo) {
+      area.innerHTML = `<div class="modal-situacao warn"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Conferência incompleta: ${d.itens.length} de ${d.total_itens_nf} item(ns) calculados (produto fora do portfólio/cadastro fiscal?) — aguardando cadastro completo pra confirmar.</span></div>`;
+      return;
+    }
+
+    area.innerHTML = `<div style="font-size:0.72rem;color:var(--text-faint)">Confirmando…</div>`;
+    const rc = await fetch("/api/oc/conferencia-integracao/confirmar", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({chvnel: ds.chvnel, numnfc: ds.numnfc, cgcfor: ds.cgcfor, cgcfil: ds.cgcfil}),
+    });
+    const dc = await rc.json();
+    if (!rc.ok) { area.innerHTML = `<div style="color:#dc2626;font-size:0.72rem">${esc(dc.erro || "Erro ao confirmar.")}</div>`; return; }
+    renderConferenciaConfirmada(area, dc);
+  } catch(e) {
+    area.innerHTML = `<div style="color:#dc2626;font-size:0.72rem">Falha na conferência: ${esc(String(e))}</div>`;
+  }
+}
+
+function renderConferenciaConfirmada(area, d) {
+  let html = `<div class="modal-situacao ok"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg></span><span>Conferência confirmada — TNSPRO/CTARED/CODCCU/CODSNF/SOMFRE gravados. A NF sai da coluna quando for concluido a importação.</span></div>`;
+  if (d.cabecalho) {
+    html += `<div style="font-size:0.7rem;margin:8px 0"><strong>CODSNF:</strong> ${esc(d.cabecalho.codsnf || "—")} &nbsp; <strong>SOMFRE:</strong> ${esc(d.cabecalho.somfre || "—")}</div>`;
+  }
+  html += `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:0 2px 4px;font-size:0.6rem;color:var(--text-faint);font-weight:600">
+      <span>Item</span><span>TNSPRO</span><span>CTARED</span><span>CCUSTO</span>
+    </div>
+    ${d.itens.map(it => `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:4px 2px;font-size:0.7rem;border-bottom:1px solid var(--border)">
+        <span>${esc(it.seqipc)} · ${esc(it.codpro || "—")}</span><span>${esc(it.tnspro || "—")}</span><span>${esc(it.ctared)}</span><span>${esc(it.ccusto)}</span>
+      </div>`).join("")}`;
+  area.innerHTML = html;
+}
+
+function marcarNavAtivo(id) {
+  document.querySelectorAll(".sidebar-nav .nav-item").forEach(n => n.classList.toggle("active", n.id === id));
+}
+document.getElementById("navCrm").addEventListener("click", () => {
+  window.location.href = "/crm";
+});
+
+/* ── Relatório de OC: popup de período ────────────────────── */
+const relOcOverlay = document.getElementById("relOcOverlay");
+
+function abrirRelOc() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  document.getElementById("relOcDe").value  = hoje;
+  document.getElementById("relOcAte").value = hoje;
+  relOcOverlay.classList.add("open");
+}
+function fecharRelOc() { relOcOverlay.classList.remove("open"); }
+
+document.getElementById("navRelatorioOc").addEventListener("click", abrirRelOc);
+document.getElementById("relOcClose").addEventListener("click", fecharRelOc);
+relOcOverlay.addEventListener("click", (e) => { if (e.target === relOcOverlay) fecharRelOc(); });
+
+document.getElementById("relOcGerar").addEventListener("click", async () => {
+  const de  = document.getElementById("relOcDe").value;
+  const ate = document.getElementById("relOcAte").value;
+  if (!de || !ate) { alert("Escolha as duas datas."); return; }
+  if (de > ate)    { alert("A data inicial não pode ser maior que a final."); return; }
+
+  const btn = document.getElementById("relOcGerar");
+  const txt = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Gerando…";
+  try {
+    const r = await fetch(`/api/oc/relatorio-aprovadas?de=${de}&ate=${ate}`);
+    if (!r.ok) {
+      let msg = r.status;
+      try { msg = (await r.json()).erro || msg; } catch {}
+      alert("Não foi possível gerar o relatório: " + msg);
+      return;
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = m ? m[1] : "relatorio_oc_aprovadas.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    fecharRelOc();
+  } catch (e) {
+    alert("Falha ao baixar o relatório: " + e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = txt;
+  }
+});
+
+document.getElementById("navBoard").addEventListener("click", () => marcarNavAtivo("navBoard"));
+
+/* ── Menu ⋮ da coluna: "Sobre" + (admin) "Segurança" ────────
+   O guia de fluxo saiu da sidebar — a explicação de cada coluna agora vive
+   no ⋮ do cabeçalho dela ("Sobre esta coluna" = col.descricao). "Segurança"
+   só aparece pra admin e abre o painel de quem pode ver aquela coluna. */
+const TODAS_COLUNAS_IDS = COLUNAS.map(c => c.id);
+
+function fecharColPops() {
+  document.querySelectorAll(".col-pop.open").forEach(p => {
+    p.classList.remove("open", "mostra-sobre");
+  });
+}
+document.getElementById("board").addEventListener("click", (e) => {
+  const btn = e.target.closest(".col-menu-btn");
+  if (btn) {
+    e.stopPropagation();
+    const pop = btn.parentElement.querySelector(".col-pop");
+    const abrir = !pop.classList.contains("open");
+    fecharColPops();
+    if (abrir) pop.classList.add("open");
+    return;
+  }
+  const acaoBtn = e.target.closest(".col-pop [data-col-acao]");
+  if (acaoBtn) {
+    e.stopPropagation();
+    const colId = acaoBtn.dataset.col;
+    if (acaoBtn.dataset.colAcao === "sobre") {
+      acaoBtn.closest(".col-pop").classList.toggle("mostra-sobre");
+    } else if (acaoBtn.dataset.colAcao === "seguranca") {
+      fecharColPops();
+      abrirSeguranca(colId);
+    }
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".col-menu-wrap")) fecharColPops();
+});
+
+/* ── Painel de segurança de UMA coluna (admin) ──────────────
+   Reaproveita o modelo por-usuário (nf_usuarios.colunas_visiveis): marcar =
+   o usuário pode ver ESTA coluna. Por baixo, recalcula a lista de colunas
+   visíveis daquele usuário e grava (null quando ele passa a ver todas). */
+async function abrirSeguranca(colId) {
+  const col = colunaById(colId);
+  document.getElementById("segurancaColNome").textContent = col ? col.titulo : colId;
+  document.getElementById("segurancaOverlay").dataset.col = colId;
+  document.getElementById("segurancaOverlay").classList.add("open");
+
+  const el = document.getElementById("segurancaLista");
+  el.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:0.72rem;padding:16px">Carregando…</div>`;
+  try {
+    const r = await fetch("/api/usuarios");
+    const { ok, data: usuarios } = await lerJsonSeguro(r);
+    if (!ok) { el.innerHTML = `<div style="color:#dc2626;font-size:0.72rem">${esc(usuarios.erro || "Erro.")}</div>`; return; }
+    const comuns = usuarios.filter(u => !u.is_admin);
+    if (!comuns.length) {
+      el.innerHTML = `<div style="color:var(--text-faint);font-size:0.72rem">Nenhum usuário comum cadastrado ainda. (Admin sempre vê tudo.)</div>`;
+      return;
+    }
+    el.innerHTML = comuns.map(u => {
+      const podeVer = !u.colunas_visiveis || u.colunas_visiveis.includes(colId);
+      return `
+        <div class="seg-user-row" data-codusu="${esc(u.codusu)}">
+          <span class="user-dot" style="background:${esc(u.cor || '#94a3b8')}"></span>
+          <span style="font-weight:600;color:var(--text)">${esc(u.nomusu)}</span>
+          <span style="color:var(--text-faint);font-size:0.65rem">(${esc(u.codusu)})</span>
+          <label><input type="checkbox" class="seg-check" ${podeVer ? "checked" : ""}> pode ver</label>
+        </div>`;
+    }).join("");
+
+    // Mantém o estado local de cada usuário pra recalcular a lista a cada toggle.
+    const estado = {};
+    comuns.forEach(u => { estado[u.codusu] = u.colunas_visiveis ? [...u.colunas_visiveis] : null; });
+
+    el.querySelectorAll(".seg-check").forEach(chk => {
+      chk.addEventListener("change", async () => {
+        const row    = chk.closest("[data-codusu]");
+        const codusu = row.dataset.codusu;
+        // visíveis atuais → Set (null = todas)
+        const atual = estado[codusu];
+        const set = new Set(atual || TODAS_COLUNAS_IDS);
+        if (chk.checked) set.add(colId); else set.delete(colId);
+        const colunas = set.size === TODAS_COLUNAS_IDS.length ? null : TODAS_COLUNAS_IDS.filter(id => set.has(id));
+
+        chk.disabled = true;
+        try {
+          const rr = await fetch(`/api/usuarios/${encodeURIComponent(codusu)}/colunas`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({colunas}),
+          });
+          const { ok: rok, data: dd } = await lerJsonSeguro(rr);
+          if (!rok) { alert(dd.erro || "Erro ao salvar."); chk.checked = !chk.checked; return; }
+          estado[codusu] = dd.colunas_visiveis ? [...dd.colunas_visiveis] : null;
+        } catch(e) {
+          alert("Falha ao salvar: " + e); chk.checked = !chk.checked;
+        } finally {
+          chk.disabled = false;
+        }
+      });
+    });
+  } catch(e) {
+    el.innerHTML = `<div style="color:#dc2626;font-size:0.72rem">Falha: ${esc(String(e))}</div>`;
+  }
+}
+document.getElementById("segurancaClose").addEventListener("click", () =>
+  document.getElementById("segurancaOverlay").classList.remove("open"));
+document.getElementById("segurancaOverlay").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+});
+
+/* ── Alertas colapsável na sidebar ─────────────────────────── */
+document.getElementById("alertsToggle").addEventListener("click", () => {
+  document.getElementById("navAlertas").classList.toggle("collapsed");
+});
+
+/* ── Alerta destacado (admin): OCs geradas e aprovadas sem fechar há +3 dias ──
+   Vive na sidebar; cada linha é uma prévia da OC e abre o modal com os
+   detalhes ao clicar. Só admin — o endpoint é @admin_required e o loop
+   nem chama pra usuário comum. */
+let _ocAlertaCache = [];
+
+function fmtBRL(v) {
+  try { return (Number(v) || 0).toLocaleString("pt-BR", {style:"currency", currency:"BRL"}); }
+  catch { return "R$ " + (Number(v) || 0).toFixed(2); }
+}
+function fmtDataBR(v) {
+  if (!v) return "—";
+  const p = String(v).slice(0, 10).split("-");
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(v);
+}
+
+async function atualizarOcAlerta() {
+  if (!CURRENT_USER || !CURRENT_USER.is_admin) return;
+  try {
+    const r = await fetch("/api/oc/alertas-nao-fechadas");
+    if (!r.ok) return;
+    renderOcAlerta(await r.json());
+  } catch {}
+}
+async function loopOcAlerta() {
+  await atualizarOcAlerta();
+  setTimeout(loopOcAlerta, 60000);
+}
+function renderOcAlerta(d) {
+  const wrap = document.getElementById("navOcAlerta");
+  const cnt  = document.getElementById("ocAlertaCount");
+  const el   = document.getElementById("ocAlertaItems");
+  if (!wrap) return;
+
+  const itens = d.itens || [];
+  _ocAlertaCache = itens;
+  wrap.style.display = "";
+  wrap.classList.toggle("zerado", itens.length === 0);
+  cnt.textContent = itens.length;
+  cnt.className = `sidebar-count${itens.length === 0 ? " zero" : ""}`;
+
+  if (!itens.length) {
+    el.innerHTML = `<div class="alert-empty-row">Nenhuma OC nessa situação ✓</div>`;
+    return;
+  }
+  el.innerHTML = itens.map((it, i) => `
+    <button class="ocalerta-row" data-oc-idx="${i}">
+      <span style="min-width:0">
+        <span class="oca-main" style="display:inline-flex;align-items:center;gap:3px">
+          OC ${esc(it.numocp)}
+          <span class="copy-btn" role="button" tabindex="0" title="Copiar número da OC" aria-label="Copiar número da OC" onclick="event.stopPropagation(); copiarNumero(this, '${esc(it.numocp)}')">
+            <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-copy"></use></svg>
+          </span>
+        </span>
+        <span class="oca-sub">${esc(it.nomfor || "Fornecedor —")}<br>
+          ${esc(fmtBRL(it.valor_aberto))} em aberto · emitida ${esc(fmtDataBR(it.datemi))}<br>
+          ${esc(it.sitocp_descr || "")}</span>
+      </span>
+      <span class="oca-dias">${Number(it.dias_aberto) || 0} d</span>
+    </button>`).join("");
+}
+document.getElementById("ocAlertaItems").addEventListener("click", (e) => {
+  const row = e.target.closest(".ocalerta-row");
+  if (!row) return;
+  const it = _ocAlertaCache[Number(row.dataset.ocIdx)];
+  if (it) abrirModalOcAlerta(it);
+});
+document.getElementById("ocAlertaToggle").addEventListener("click", () => {
+  document.getElementById("navOcAlerta").classList.toggle("collapsed");
+});
+
+async function abrirModalOcAlerta(it) {
+  const overlay = document.getElementById("modalOverlay");
+  const stripe  = document.getElementById("modalStripe");
+  const numEl   = document.getElementById("modalNfNum");
+  const forEl   = document.getElementById("modalFornecedor");
+  const body    = document.getElementById("modalBody");
+
+  stripe.style.background = "#dc2626";
+  numEl.textContent = `OC ${it.numocp}`;
+  numEl.dataset.numero = it.numocp;
+  forEl.textContent = it.nomfor || "";
+  overlay.classList.add("open");
+
+  let html = `
+    <div class="modal-situacao warn">
+      <span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-siren"></use></svg></span>
+      <span>OC gerada e aprovada pelo fluxo, emitida há <strong>${Number(it.dias_aberto) || 0} dias</strong> e ainda sem fechar.</span>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">Dados da OC</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;font-size:0.74rem">
+        <div><span style="color:var(--text-faint)">Empresa / Filial</span><br>${esc(it.codemp)} / ${esc(it.codfil)}</div>
+        <div><span style="color:var(--text-faint)">Fornecedor</span><br>${esc(it.codfor || "—")} — ${esc(it.nomfor || "—")}</div>
+        <div><span style="color:var(--text-faint)">Emissão</span><br>${esc(fmtDataBR(it.datemi))} &nbsp;(${Number(it.dias_aberto) || 0} dias)</div>
+        <div><span style="color:var(--text-faint)">Situação (SITOCP)</span><br>${esc(it.sitocp_descr || "—")}</div>
+        <div><span style="color:var(--text-faint)">Valor em aberto</span><br>${esc(fmtBRL(it.valor_aberto))}</div>
+        <div><span style="color:var(--text-faint)">Itens em aberto</span><br>${Number(it.itens_abertos) || 0}</div>
+      </div>
+      ${it.obsocp ? `<div style="margin-top:11px;font-size:0.7rem"><span style="color:var(--text-faint)">Observação (obsOcp)</span><br>${esc(it.obsocp)}</div>` : ""}
+    </div>
+    <div class="modal-section" id="ocAlertaItensSec">
+      <div style="text-align:center;padding:18px">
+        <div class="spinner" style="--col-color:#dc2626"></div>
+        <div style="font-size:0.7rem;color:var(--text-faint);margin-top:4px">Buscando itens da OC…</div>
+      </div>
+    </div>`;
+  body.innerHTML = html;
+
+  try {
+    const r = await fetch(`/api/oc/detalhe?codemp=${encodeURIComponent(it.codemp)}&codfil=${encodeURIComponent(it.codfil)}&numocp=${encodeURIComponent(it.numocp)}`);
+    const d = await r.json();
+    const sec = document.getElementById("ocAlertaItensSec");
+    if (!sec) return;
+    if (!r.ok || d.erro || !d.itens) {
+      sec.innerHTML = `<div style="font-size:0.7rem;color:var(--text-faint)">Não foi possível carregar os itens da OC${d && d.erro ? ` — ${esc(d.erro)}` : ""}.</div>`;
+      return;
+    }
+    sec.innerHTML = `
+      <div class="modal-section-title">Itens da OC (${d.itens.length})</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;padding:0 2px 4px;font-size:0.6rem;color:var(--text-faint);font-weight:600">
+        <span>Produto</span><span>Qtd orig.</span><span>Qtd rec.</span><span>Qtd aberta</span>
+      </div>
+      ${d.itens.map(li => `
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;padding:4px 2px;font-size:0.7rem;border-bottom:1px solid var(--border)">
+          <span>${esc(String(li.codpro || "—"))}${li.cplipo ? " · " + esc(String(li.cplipo)) : ""}</span>
+          <span>${esc(String(li.qtdori ?? "—"))}</span>
+          <span>${esc(String(li.qtdrec ?? "—"))}</span>
+          <span>${esc(String(li.qtdabe ?? "—"))}</span>
+        </div>`).join("")}`;
+  } catch (e) {
+    const sec = document.getElementById("ocAlertaItensSec");
+    if (sec) sec.innerHTML = `<div style="font-size:0.7rem;color:#dc2626">Falha ao carregar itens: ${esc(String(e))}</div>`;
+  }
+}
+
+/* ── Recolher / expandir a sidebar (estado no navegador) ──── */
+const SIDEBAR_KEY = "conf_oc_sidebar";
+function estadoSidebar() {
+  try { return localStorage.getItem(SIDEBAR_KEY) === "recolhida" ? "recolhida" : "expandida"; }
+  catch { return "expandida"; }
+}
+function aplicarSidebar(estado) {
+  const recolhida = estado === "recolhida";
+  document.getElementById("sidebar").classList.toggle("collapsed", recolhida);
+  document.getElementById("sidebarToggle").title = recolhida ? "Expandir menu" : "Recolher menu";
+}
+document.getElementById("sidebarToggle").addEventListener("click", () => {
+  const novo = estadoSidebar() === "recolhida" ? "expandida" : "recolhida";
+  try { localStorage.setItem(SIDEBAR_KEY, novo); } catch {}
+  aplicarSidebar(novo);
+});
+aplicarSidebar(estadoSidebar());
+
+verificarAuth();
+</script>
+</body>
+</html>

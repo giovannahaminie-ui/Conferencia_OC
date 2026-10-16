@@ -1,0 +1,29 @@
+# Bancos de dados locais
+*.db
+*.sqlite
+*.sqlite3
+*.sqbpro
+
+# Ambiente virtual Python
+.venv/
+venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Variáveis de ambiente
+.env
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Variáveis de ambiente
+.env
+.env.*
+
+# Node.js
+node_modules/
+*.db
