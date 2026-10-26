@@ -56,6 +56,15 @@ from xml.sax.saxutils import escape as _xml_escape
 _ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 _LOG_DIR  = os.path.join(os.path.dirname(__file__), "webservice_logs")
 
+# Timeouts por tipo de chamada (segundos). Eram 300s pra tudo — com ~17
+# cancelamentos numa NF grande, um webservice pendurado segurava a NF por mais
+# de uma hora (o scheduler não inicia outra rodada enquanto uma está rodando).
+# Cancelamento é uma Alteração de 1 linha: 60s é folga de sobra. A Inclusão
+# manda a OC inteira (dezenas/centenas de linhas numa chamada só) e grava mais
+# devagar, por isso tem folga maior.
+_TIMEOUT_CANCELAR = 60
+_TIMEOUT_GERAR    = 180
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuração (.env)
@@ -217,10 +226,10 @@ def _gravar_log_arquivo(envelope_mascarado: str, conteudo: str) -> None:
         pass
 
 
-def _chamar(xml: str, cfg: dict) -> str:
+def _chamar(xml: str, cfg: dict, timeout: int = _TIMEOUT_GERAR) -> str:
     """
-    POST do envelope no endpoint (sem '?wsdl'). Timeout 300s — gravação no
-    Senior pode demorar. Grava request/response em backend/webservice_logs/
+    POST do envelope no endpoint (sem '?wsdl'). `timeout` em segundos (ver
+    _TIMEOUT_CANCELAR/_TIMEOUT_GERAR). Grava request/response em backend/webservice_logs/
     (senha sempre mascarada), inclusive quando a chamada falha antes de ter
     resposta (erro de rede/timeout).
     """
@@ -230,7 +239,7 @@ def _chamar(xml: str, cfg: dict) -> str:
             cfg["url"],
             data=xml.encode("utf-8"),
             headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": ""},
-            timeout=300,
+            timeout=timeout,
         )
         resp.raise_for_status()
     except Exception as e:
@@ -412,7 +421,7 @@ def cancelar_item_oc_via_webservice(codemp, codfil, numocp, seqipo, qtd, qtd_ped
         obs_mot="Conferencia NF x OC - cancelamento automatico",
     )
     try:
-        resp = _chamar(xml, cfg)
+        resp = _chamar(xml, cfg, timeout=_TIMEOUT_CANCELAR)
     except Exception as e:
         return {
             "sucesso": False, "numocp": numocp, "seqipo": seqipo, "qtd": qtd,

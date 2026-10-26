@@ -160,8 +160,10 @@ def conferir_nf_vs_portfolio(
     # paralelo ao numocps_relevantes, nos mesmos dois pontos.
     seqipos_relevantes: dict[str, set] = {}
     total_cobertos = 0
+    ocs_da_nf = None          # carregada sob demanda (ver abaixo)
+    linhas_usadas = set()
     for seqipc in seqipcs:
-        item = buscar_item_nf(chvnel, seqipc)
+        item = buscar_item_nf(chvnel, seqipc, codfor)
         if not item:
             itens_nao_encontrados.append(seqipc)
             continue
@@ -231,6 +233,7 @@ def conferir_nf_vs_portfolio(
                 })
                 continue
             total_cobertos += 1
+            linhas_usadas.add((item["numocp"], item["seqipo"]))
             numocps_relevantes.add(str(item["numocp"]))
             if item["seqipo"] is not None:
                 seqipos_relevantes.setdefault(str(item["numocp"]), set()).add(item["seqipo"])
@@ -245,6 +248,49 @@ def conferir_nf_vs_portfolio(
                 "fora_portfolio":    False,  # chegou aqui só se profor JÁ está no portfólio (trava acima)
                 "ocs_cobertura":     [{"numocp": item["numocp"], "seqipo": item["seqipo"], "codpro": item["codpro"]}],
                 "divergencia":       None,
+            })
+            continue
+
+        # Mesma regra do fluxo automático (nf_processor._rodar_verificacao_oc):
+        # o vínculo na E000IPC não vale, mas o sistema pode já ter gerado a OC
+        # desta NF (observação "p/ NF <n>:"). Sem isso o modal mostrava "sem
+        # OC" porque a reserva da própria NF zera o saldo das candidatas.
+        if ocs_da_nf is None:
+            numnfc_nf = numnfc_da_chvnel(chvnel)
+            ocs_da_nf = listar_ocs_da_nf(item["codemp"], item["codfil"], item["codfor"], numnfc_nf) if numnfc_nf else []
+        veredito, oc_nf, linha_nf = casar_item_com_ocs_da_nf(ocs_da_nf, codpro_ws, qtd_nf, linhas_usadas)
+        if veredito == "achou":
+            total_cobertos += 1
+            numocps_relevantes.add(str(oc_nf["numocp"]))
+            seqipos_relevantes.setdefault(str(oc_nf["numocp"]), set()).add(linha_nf["seqipo"])
+            itens_resultado.append({
+                "seqipc":            item["seqipc"],
+                "codpro":            item["codpro"],
+                "profor":            item["profor"],
+                "despro":            item["cplipc"],
+                "qtdinf":            qtd_nf,
+                "qtd_oc_disponivel": qtd_nf,
+                "coberto":           True,
+                "fora_portfolio":    False,
+                "oc_da_nf":          True,
+                "ocs_cobertura":     [{"numocp": oc_nf["numocp"], "seqipo": linha_nf["seqipo"], "codpro": linha_nf["codpro"]}],
+                "divergencia":       None,
+            })
+            continue
+        if veredito == "ambigua":
+            for n in oc_nf:
+                numocps_relevantes.add(str(n))
+            itens_resultado.append({
+                "seqipc":            item["seqipc"],
+                "codpro":            item["codpro"],
+                "profor":            item["profor"],
+                "despro":            item["cplipc"],
+                "qtdinf":            qtd_nf,
+                "qtd_oc_disponivel": 0,
+                "coberto":           False,
+                "fora_portfolio":    False,
+                "ocs_cobertura":     [],
+                "divergencia":       f"OC da NF ambígua: {', '.join(map(str, oc_nf))} — deixar só uma OC no Sapiens",
             })
             continue
 
@@ -364,13 +410,20 @@ def listar_seqipc_nf(chvnel: str) -> list:
         conn.close()
 
 
-def buscar_item_nf(chvnel: str, seqipc) -> dict | None:
+def buscar_item_nf(chvnel: str, seqipc, codfor=None) -> dict | None:
     """
     Busca um item específico da NF (chvnel + seqipc), com empresa/filial/
     fornecedor derivados via E070FIL/E095FOR, e o NUMOCP/SEQIPO se a NF já
     veio com OC informada pra esse item.
+
+    `codfor` (opcional): o fornecedor da NF que quem chama já conhece. O CGC
+    do fornecedor pode ter vários cadastros na E095FOR (caso real: NF 85353,
+    15 cadastros pro mesmo CNPJ) e sem este filtro o join devolvia um deles
+    arbitrariamente (rows[0]) — o fluxo/modal acabava buscando OC pro
+    fornecedor errado. Quando informado, restringe o join a esse CODFOR.
     """
-    sql = """
+    filtro_codfor = "AND f.codfor = :codfor" if codfor not in (None, "") else ""
+    sql = f"""
         SELECT
             e.codemp, e.codfil, f.codfor,
             n.seqipc, n.codpro, n.profor, n.cplipc,
@@ -382,11 +435,15 @@ def buscar_item_nf(chvnel: str, seqipc) -> dict | None:
         JOIN sapiens.e095for f ON f.cgccpf = n.cgcfor
         WHERE n.chvnel = :chvnel
           AND n.seqipc = :seqipc
+          {filtro_codfor}
     """
+    binds = {"chvnel": chvnel, "seqipc": seqipc}
+    if filtro_codfor:
+        binds["codfor"] = codfor
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute(sql, chvnel=chvnel, seqipc=seqipc)
+        cur.execute(sql, **binds)
         rows = rows_to_dict(cur)
     finally:
         conn.close()
@@ -468,9 +525,18 @@ def liberar_reserva_item_oc(codemp, codfil, numocp, seqipo, qtd: float) -> None:
     finally:
         conn.close()
 
+# Idade máxima (dias desde E420OCP.DATEMI) de uma OC aberta pra ela poder cobrir
+# uma NF. OC mais velha é ignorada na busca/consolidação — decisão de negócio
+# (ex: OC 7179 de jan/2025 não deve ser usada nem cancelada pra uma NF de
+# out/2026). Não afeta vínculo já gravado na E000IPC (item já ligado a uma OC
+# continua valendo) nem a OC gerada pelo próprio sistema pra a NF.
+OC_IDADE_MAXIMA_DIAS = 180
+
+
 def _listar_ocs_candidatas(codemp, codfil, codfor, codpro, numocp=None, seqipo=None, reservas_locais=None) -> list[dict]:
     """
-    Lista as OCs abertas candidatas pra esse produto, com saldo já
+    Lista as OCs abertas candidatas pra esse produto (emitidas nos últimos
+    OC_IDADE_MAXIMA_DIAS dias), com saldo já
     descontando a reserva provisória (USU_CODANA), ordenadas por data
     (mais antiga primeiro). Não filtra por quantidade necessária — quem
     chama decide o que fazer com cada candidata.
@@ -519,6 +585,7 @@ def _listar_ocs_candidatas(codemp, codfil, codfor, codpro, numocp=None, seqipo=N
               AND o.sitocp IN (1, 2)
               AND i.CODPRO IN ({in_list}) 
               AND i.sitipo IN (1, 2)
+              AND o.datemi >= TRUNC(SYSDATE) - :idade_max
               AND (:numocp IS NULL OR o.numocp = :numocp)
               AND (:seqipo IS NULL OR i.seqipo = :seqipo)
             ORDER BY o.datemi, o.numocp, i.seqipo
@@ -527,7 +594,7 @@ def _listar_ocs_candidatas(codemp, codfil, codfor, codpro, numocp=None, seqipo=N
         try:
             cur = conn.cursor()
             cur.execute(sql, codemp=codemp, codfil=codfil, codfor=codfor,
-                        numocp=numocp, seqipo=seqipo, **binds)
+                        numocp=numocp, seqipo=seqipo, idade_max=OC_IDADE_MAXIMA_DIAS, **binds)
             rows = rows_to_dict(cur)
         finally:
             conn.close()
@@ -760,6 +827,134 @@ def numocp_vinculo_valido(codemp, codfil, numocp, seqipo=None, codfor=None, codp
         conn.close()
 
 
+def assinatura_linhas_oc(codemp, codfil, linhas) -> str:
+    """
+    "Foto" do estado de um conjunto de linhas de OC — [(numocp, seqipo), ...] —
+    como texto comparável: SITOCP/SITAPR da OC e SITIPO/QTDCAN/QTDABE da linha.
+
+    Usada quando o Sapiens recusa um cancelamento (OC fechada / aprovação
+    multinível): a NF fica parada e guarda esta foto; a cada rodada só compara
+    a foto atual com a guardada (consulta leve, sem webservice). Se mudou, é
+    porque o comprador mexeu na OC no Sapiens e vale tentar de novo.
+    """
+    partes = []
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        for numocp, seqipo in sorted(linhas):
+            cur.execute("""
+                SELECT o.SITOCP, o.SITAPR, i.SITIPO, i.QTDCAN, i.QTDABE
+                FROM sapiens.E420OCP o
+                LEFT JOIN sapiens.E420IPO i
+                  ON i.CODEMP = o.CODEMP AND i.CODFIL = o.CODFIL AND i.NUMOCP = o.NUMOCP AND i.SEQIPO = :seqipo
+                WHERE o.CODEMP = :codemp AND o.CODFIL = :codfil AND o.NUMOCP = :numocp
+            """, codemp=codemp, codfil=codfil, numocp=numocp, seqipo=seqipo)
+            row = cur.fetchone()
+            partes.append(f"{numocp}/{seqipo}:" + (",".join(str(v).strip() for v in row) if row else "inexistente"))
+    finally:
+        conn.close()
+    return "|".join(partes)
+
+
+def numnfc_da_chvnel(chvnel: str) -> str | None:
+    """Número da NF (E000NFC.NUMNFC) a partir da chave CHVNEL, ou None se não achar."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT NUMNFC FROM sapiens.E000NFC WHERE CHVNEL = :chvnel", chvnel=chvnel)
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    return str(row[0]).strip() if row and row[0] is not None else None
+
+
+def listar_ocs_da_nf(codemp, codfil, codfor, numnfc) -> list[dict]:
+    """
+    OCs VIVAS (SITOCP 1/2/9) do fornecedor que o próprio sistema gerou pra
+    esta NF — identificadas pela observação "... p/ NF <numnfc>: ..." que
+    gerar_oc_aprovada_via_webservice / gerar_oc_para_aprovacao gravam em
+    OBSOCP. O ":" depois do número é o delimitador: "p/ NF 8535:" nunca casa
+    com a NF 85353.
+
+    Existe pra o fluxo/modal reconhecerem a OC que já foi criada quando o
+    vínculo na E000IPC (NUMOCP) foi perdido ou sobrescrito — sem isso o
+    fluxo trata o item como novo e gera OC duplicada (a reserva USU_CODANA da
+    própria NF zera o saldo, então nenhuma candidata aparece).
+
+    Retorna [{numocp, sitocp, sitapr, linhas:[{seqipo, codpro, qtdori,
+    qtdabe, reservado}]}], ordenado por NUMOCP.
+    """
+    numnfc = str(numnfc or "").strip()
+    if not numnfc.isdigit():
+        return []
+    sql = """
+        SELECT o.NUMOCP, o.SITOCP, o.SITAPR,
+               i.SEQIPO, i.CODPRO, i.QTDORI, i.QTDABE, NVL(i.USU_CODANA, 0) AS RESERVADO
+        FROM sapiens.E420OCP o
+        JOIN sapiens.E420IPO i
+          ON i.CODEMP = o.CODEMP AND i.CODFIL = o.CODFIL AND i.NUMOCP = o.NUMOCP
+        WHERE o.CODEMP = :codemp AND o.CODFIL = :codfil AND o.CODFOR = :codfor
+          AND o.SITOCP IN (1, 2, 9)
+          AND i.SITIPO IN (1, 2)
+          AND o.OBSOCP LIKE :padrao
+        ORDER BY o.NUMOCP, i.SEQIPO
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, codemp=codemp, codfil=codfil, codfor=codfor, padrao=f"%p/ NF {numnfc}:%")
+        rows = rows_to_dict(cur)
+    finally:
+        conn.close()
+
+    ocs: dict = {}
+    for r in rows:
+        oc = ocs.setdefault(r["NUMOCP"], {
+            "numocp": r["NUMOCP"], "sitocp": str(r["SITOCP"]).strip(),
+            "sitapr": str(r["SITAPR"] or "").strip(), "linhas": [],
+        })
+        oc["linhas"].append({
+            "seqipo": r["SEQIPO"], "codpro": str(r["CODPRO"] or "").strip(),
+            "qtdori": float(r["QTDORI"] or 0), "qtdabe": float(r["QTDABE"] or 0),
+            "reservado": float(r["RESERVADO"] or 0),
+        })
+    return list(ocs.values())
+
+
+def casar_item_com_ocs_da_nf(ocs_da_nf, codpro, qtd, usadas, preferidas=()):
+    """
+    Procura, nas OCs geradas pra esta NF (listar_ocs_da_nf), a linha que
+    cobre um item: mesmo CODPRO e QTDORI == quantidade da NF, ainda não
+    usada por outro item (`usadas`: set de (numocp, seqipo), atualizado aqui
+    quando acha).
+
+    Nunca adivinha: se linhas compatíveis existem em MAIS DE UMA OC, só
+    escolhe se exatamente uma delas está em `preferidas` (NUMOCPs que o
+    sistema já conhece pra esta NF — referencia do nf_processamento);
+    senão devolve "ambigua" e quem chama NÃO deve gerar OC nem vincular.
+
+    Retorna ("achou", oc, linha) | ("ambigua", [numocps], None) | ("nenhuma", None, None).
+    """
+    codpro = str(codpro or "").strip()
+    achadas = []
+    for oc in ocs_da_nf:
+        for ln in oc["linhas"]:
+            if ln["codpro"] == codpro and ln["qtdori"] == float(qtd) and (oc["numocp"], ln["seqipo"]) not in usadas:
+                achadas.append((oc, ln))
+                break   # uma linha por OC basta pra contar a OC como candidata
+    if not achadas:
+        return "nenhuma", None, None
+    if len(achadas) > 1:
+        pref = {str(p) for p in preferidas if p}
+        escolhidas = [a for a in achadas if str(a[0]["numocp"]) in pref]
+        if len(escolhidas) != 1:
+            return "ambigua", [a[0]["numocp"] for a in achadas], None
+        achadas = escolhidas
+    oc, ln = achadas[0]
+    usadas.add((oc["numocp"], ln["seqipo"]))
+    return "achou", oc, ln
+
+
 def nf_esta_cancelada(chvnel: str) -> bool:
     """
     Confere E000NFC.INDCAN pra essa NF (CHVNEL é a chave única — 44 dígitos).
@@ -827,6 +1022,36 @@ def nf_ja_integrada(codemp: str, codfil: str, codfor: str, numnfc: str, chvnel: 
         return cur.fetchone() is not None
     finally:
         conn.close()
+
+def nf_consta_e440nfc(codemp: str, codfil: str, codfor: str, numnfc: str) -> bool:
+    """
+    Confere SÓ na E440NFC (empresa/filial/fornecedor/número, qualquer série) se
+    a NF ainda consta como importada. Usada na reconferência das NFs já
+    INTEGRADA, pra detectar a que foi excluída/estornada no Sapiens depois.
+
+    Diferente de nf_ja_integrada, NÃO depende da E000NFC: algumas NFs
+    integradas não têm linha na E000NFC (lançamento manual, ou a linha foi
+    limpa depois da importação), e nf_ja_integrada devolve False nesse caso —
+    aqui isso viraria falso "sumiu da E440NFC" e a NF seria devolvida ao fluxo
+    sem motivo. Qualquer série conta como "consta" (mais conservador).
+    """
+    sql = """
+        SELECT 1 FROM DUAL WHERE EXISTS (
+            SELECT 1 FROM sapiens.E440NFC
+            WHERE codemp = :codemp
+              AND codfil = :codfil
+              AND codfor = :codfor
+              AND numnfc = :numnfc
+        )
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, codemp=codemp, codfil=codfil, codfor=codfor, numnfc=numnfc)
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
 
 def verificar_pronto_integracao(codemp: str, codfil: str, codfor: str, numnfc: str) -> bool:
     """

@@ -30,6 +30,8 @@ from nf_processor import (
     reconferir_oc_pendente,
     reprocessar_travada,
     reconferir_integracao,
+    reconferir_integrada,
+    listar_nfs_integradas_recentes,
     listar_nfs_no_estagio,
     listar_nfs_ativas,
     AGUARDANDO_LIGACAO,
@@ -131,6 +133,18 @@ def conferir_nfs_integrada():
         if resultado.get("resultado") == "INTEGRADA":
             saíram += 1
     print(f" {saíram} NF(s) marcada(s) como INTEGRADA e removida(s) do board")
+
+    # INTEGRADA é terminal, mas a NF pode ter sido excluída/estornada no
+    # Sapiens depois (some da E440NFC) — devolve ao fluxo as INTEGRADA
+    # recentes que não constam mais lá. Roda DEPOIS do loop acima de propósito:
+    # uma NF que acabou de virar INTEGRADA nesta rodada já consta na E440NFC.
+    integradas = listar_nfs_integradas_recentes()
+    voltaram = 0
+    for registro in integradas:
+        resultado = reconferir_integrada(registro)
+        if resultado.get("resultado") == VERIFICACAO_OC:
+            voltaram += 1
+    print(f" {len(integradas)} NF(s) INTEGRADA recente(s) reconferida(s), {voltaram} voltou(aram) pro fluxo")
     print("-" * 60)
 
 # ─────────────────────────────────────────────────────────────────────────────

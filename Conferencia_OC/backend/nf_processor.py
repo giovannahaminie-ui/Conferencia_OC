@@ -76,13 +76,23 @@ from oc_service import (
     descricao_sitocp,
     nf_esta_cancelada,
     nf_ja_integrada,
+    nf_consta_e440nfc,
     codpro_do_portfolio,
     buscar_seqipos_da_oc,
+    listar_ocs_da_nf,
+    casar_item_com_ocs_da_nf,
+    assinatura_linhas_oc,
 )
 from whatsapp import (
     notificar_fiscal_pendencias,
     notificar_junior_criar_oc,
+    notificar_junior_cancelamento_bloqueado,
 )
+
+# Chave de `referencia` (nf_processamento) do estágio AGUARDANDO_APROVACAO_OC
+# quando o Sapiens recusou um cancelamento — NÃO é um NUMOCP (os leitores de
+# `referencia` que tratam valores como NUMOCP precisam ignorá-la).
+CANCELAMENTO_BLOQUEADO = "cancelamento_bloqueado"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Estágios do fluxo (nomes usados em nf_processamento.divergencias[0].tipo)
@@ -113,6 +123,13 @@ ESTAGIOS_ATIVOS = (
     AGUARDANDO_APROVACAO_OC,
     AGUARDANDO_INTEGRACAO,
 )
+
+# INTEGRADA é terminal, mas uma NF integrada pode ser excluída/estornada no
+# Sapiens depois (some da E440NFC) — sem reconferir, ficaria órfã pra sempre
+# (sem coluna no board e sem ser tocada pelo scheduler). Só reconfere as
+# INTEGRADA mais recentes que esta janela (em dias), pra não consultar o Oracle
+# por todo o histórico a cada rodada.
+INTEGRADA_RECONFERIR_DIAS = 3
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SQLite — estado atual da NF (nf_processamento)
@@ -179,6 +196,21 @@ def listar_nfs_ativas() -> list[dict]:
     conn.close()
     return [r for r in rows if r["status_interno"] in ESTAGIOS_ATIVOS]
 
+def listar_nfs_integradas_recentes(dias: int = INTEGRADA_RECONFERIR_DIAS) -> list[dict]:
+    "Última linha das NFs em INTEGRADA marcadas nos últimos `dias` dias — candidatas à reconferência."
+    conn = get_local_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT t.* FROM nf_processamento t
+        INNER JOIN (
+            SELECT numnfc, MAX(id) AS max_id FROM nf_processamento GROUP BY numnfc
+        ) u ON u.numnfc = t.numnfc AND u.max_id = t.id
+        WHERE t.criado_em >= strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime', ?)
+    """, (f"-{int(dias)} days",))
+    rows = [_linha_com_info(dict(r)) for r in cur.fetchall()]
+    conn.close()
+    return [r for r in rows if r["status_interno"] == INTEGRADA]
+
 def _dados_nf_do_registro(registro: dict) -> dict:
     """Reconstrói o dict de dados da NF a partir de uma linha de nf_processamento."""
     return {
@@ -188,6 +220,9 @@ def _dados_nf_do_registro(registro: dict) -> dict:
         "cgcfil": registro["cgcfil"], "nomfor": registro["nomfor"],
         "datemi": registro["datemi"], "vlrfin": registro["vlrfin"],
         "qtdite": registro["qtdite"],
+        # NUMOCPs que o sistema já conhece pra esta NF — desempata a busca da
+        # OC da NF quando há mais de uma candidata (ver _rodar_verificacao_oc).
+        "referencia": registro.get("referencia"),
     }
 
 
@@ -648,8 +683,20 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # verdade, não a foto original do banco.
     reservas_locais = {}
 
+    # OC que o PRÓPRIO sistema já gerou pra esta NF (observação "p/ NF <n>:"),
+    # recuperada quando o vínculo na E000IPC se perdeu/foi sobrescrito (ex:
+    # NUMOCP trocado por um número de pedido do fornecedor). Sem isso o item
+    # era tratado como novo e uma OC duplicada era gerada a cada vez (a
+    # reserva da própria NF zera o saldo das candidatas). Carregada só quando
+    # algum item precisa; `usadas` evita dois itens ocuparem a mesma linha.
+    ocs_da_nf = None
+    linhas_usadas = set()
+    itens_recuperados = []   # [{seqipc, numocp, seqipo, qtd_rec, reservado}] — vínculo gravado na Fase 2
+    itens_ambiguos = []      # [(seqipc, [numocps])] — NF para sem gerar nada
+    preferidas = [v for k, v in (dados_nf.get("referencia") or {}).items() if k != "erros_webservice"]
+
     for seqipc in seqipcs:
-        item = buscar_item_nf(chvnel, seqipc)
+        item = buscar_item_nf(chvnel, seqipc, codfor)
         if not item:
             continue
 
@@ -680,6 +727,7 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
             # "liberada" em cima de nada.
             sitocp_vinc = oc_situacao(codemp, codfil, item["numocp"])[0] if vinculo_ok else None
             if vinculo_ok and sitocp_vinc not in ("4", "5"):
+                linhas_usadas.add((item["numocp"], item.get("seqipo")))
                 # Vínculo existe, é do fornecedor certo E do produto certo, e a
                 # OC ainda está viva — mas só conta como "pronto" se a OC já
                 # foi APROVADA (SITAPR='APR'). Toda OC nova nasce 'ANA' (em
@@ -718,6 +766,24 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
                                f"{motivo} — vínculo limpo, reconferindo", seqipc=seqipc)
 
         qtd_rec = item["qtd_recebida"]
+
+        # Antes de buscar saldo/gerar OC: esta NF já tem OC gerada pelo sistema?
+        if ocs_da_nf is None:
+            ocs_da_nf = listar_ocs_da_nf(codemp, codfil, codfor, numnfc)
+        veredito, oc_nf, linha_nf = casar_item_com_ocs_da_nf(
+            ocs_da_nf, codpro_ws, qtd_rec, linhas_usadas, preferidas)
+        if veredito == "ambigua":
+            itens_ambiguos.append((seqipc, oc_nf))
+            continue
+        if veredito == "achou":
+            itens_recuperados.append({"seqipc": seqipc, "numocp": oc_nf["numocp"], "seqipo": linha_nf["seqipo"],
+                                      "qtd_rec": qtd_rec, "reservado": linha_nf["reservado"]})
+            if oc_nf["sitapr"] == "APR":
+                itens_ja_vinculados += 1
+            else:
+                itens_aguardando_aprovacao.append({"seqipc": seqipc, "numocp": oc_nf["numocp"]})
+            continue
+
         # Busca de OC usa codpro_ws (já resolvido via portfólio quando a NF
         # vem sem CODPRO), não o `codpro` cru da E000IPC — sem isso, item
         # sem CODPRO na NF (comum) nunca achava OC nenhuma depois que a
@@ -781,6 +847,23 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
                 reservas_locais[chave] = reservas_locais.get(chave, 0) + usar
             itens_pendente.append(base)
 
+    # ── TRAVA 0: OC da NF ambígua ───────────────────────────────────────────
+    # Há mais de uma OC viva gerada pra esta NF cobrindo o mesmo item (ex:
+    # duplicatas de rodadas anteriores). Não dá pra saber qual é a certa, e
+    # gerar mais uma só pioraria — para sem cancelar/gerar/vincular nada até
+    # alguém deixar uma OC só (cancelando as sobras no Sapiens).
+    if itens_ambiguos:
+        numocps_amb = sorted({n for _, lista in itens_ambiguos for n in lista})
+        detalhe = (f"{len(itens_ambiguos)} item(ns) com mais de uma OC gerada pra esta NF "
+                   f"({', '.join(map(str, numocps_amb))}) — nenhuma OC nova gerada, "
+                   f"requer decisão manual (deixar só uma OC no Sapiens).")
+        anterior = _buscar_estagio_atual(numnfc)
+        if not anterior or anterior.get("status_interno") != VERIFICACAO_OC or anterior.get("detalhe") != detalhe:
+            registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "OC da NF ambígua — geração de OC abortada", detalhe)
+        _registrar_estagio(dados_nf, VERIFICACAO_OC, detalhe)
+        print(f"  ⛔ {detalhe}")
+        return {"numnfc": numnfc, "resultado": VERIFICACAO_OC, "detalhe": detalhe}
+
     # ── TRAVA 1: confere a classificação contra a NF ────────────────────────
     # Antes de cancelar/gerar qualquer OC, valida que TODOS os itens da NF
     # foram contemplados (OC_OK / já vinculado / Juntar_OC / OC_Pendente). Se
@@ -821,6 +904,17 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, f"Item {it['seqipc']} OK",
                            f"OC {oc['numocp']} (seq {oc['seqipo']}) qtd={it['qtd_rec']}", seqipc=it["seqipc"])
 
+    # Religa os itens à OC que o sistema já tinha gerado pra esta NF (vínculo
+    # perdido). A reserva (USU_CODANA) normalmente já está feita — só completa
+    # se faltar, pra outra NF não enxergar a linha como livre.
+    for it in itens_recuperados:
+        falta_reservar = it["qtd_rec"] - it["reservado"]
+        if falta_reservar > 0:
+            reservar_item_oc(codemp, codfil, it["numocp"], it["seqipo"], falta_reservar)
+        vincular_item_oc(chvnel, it["seqipc"], it["numocp"], it["seqipo"])
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, f"Item {it['seqipc']} religado à OC da NF {it['numocp']} (seq {it['seqipo']})",
+                           "Vínculo perdido na E000IPC — OC já gerada pra esta NF reaproveitada, nenhuma OC nova", seqipc=it["seqipc"])
+
     ocp_apr = ""              # acumulador Juntar_OC  — "CodPro;QtdRec/"
     ocp_pen = ""              # acumulador OC_Pendente — "CodPro;QtdRec;QtdOcp/"
     ocp_can = ""              # acumulador cancelamento — "NumOcp;SeqIpo;Qtd/"
@@ -829,19 +923,39 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     seqipcs_apr = []          # (seqipc, qtd_rec) que sobreviveram — pra vincular à OC nova
     seqipcs_pen = []          # idem, pro caminho OC_Pendente
 
+    # Progresso da Fase 2 (cancelamentos via webservice): cada chamada pode
+    # demorar/travar, então cada uma é registrada ANTES de ser enviada — se o
+    # processo ficar preso numa chamada, o log mostra qual (item/OC/linha) e
+    # quantas faltavam.
+    prog = {"n": 0, "total": sum(len(it["a_cancelar"]) for it in itens_juntar + itens_pendente)}
+    falha_cancelamento = None   # {"seqipc", "numocp", "seqipo", "erro"} da 1ª falha — para a NF inteira
+    if prog["total"]:
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "Fase 2 iniciada — cancelamentos via webservice",
+                           f"{prog['total']} cancelamento(s) a enviar em {len(itens_juntar) + len(itens_pendente)} item(ns)")
+        print(f"  ▶️  Fase 2: {prog['total']} cancelamento(s) a enviar")
+
     def _cancelar_candidatas(seqipc, candidatas_a_cancelar):
         """
         Executa os cancelamentos (webservice, Alteração) de uma lista de
         (oc, usar) pra um item, checando sucesso um a um e gravando cada
         tentativa (envelope + raw, sucesso ou falha) em nf_log_acoes.
         Retorna (ok, cancelados) — ok=False se QUALQUER tentativa falhar; a
-        função PARA na primeira falha (não tenta as seguintes), mas as que já
-        deram certo antes dela já podem ter sido aplicadas de verdade no
-        Sapiens — fica registrado em log pra a reconferência da próxima
-        rodada recalcular o saldo real, em vez de tentar desfazer.
+        função PARA na primeira falha (não tenta as seguintes) e quem chama
+        interrompe a NF inteira SEM gerar OC (ver falha_cancelamento). Os
+        cancelamentos que já deram certo antes dela já foram aplicados de
+        verdade no Sapiens — ficam registrados em log pra a reconferência da
+        próxima rodada recalcular o saldo real, em vez de tentar desfazer.
         """
+        nonlocal falha_cancelamento
         cancelados = []
         for oc, usar in candidatas_a_cancelar:
+            prog["n"] += 1
+            registrar_log_acao(
+                numnfc, chvnel, VERIFICACAO_OC,
+                f"Cancelamento {prog['n']}/{prog['total']} — enviando (item {seqipc}, OC {oc['numocp']}/{oc['seqipo']}, qtd={usar})",
+                seqipc=seqipc,
+            )
+            print(f"  ⏳ Cancelamento {prog['n']}/{prog['total']} — item {seqipc}, OC {oc['numocp']}/{oc['seqipo']}")
             # qtdCan no Senior é ABSOLUTO (a quantidade cancelada TOTAL da
             # linha), não um delta — confirmado num teste real: mandar só
             # `usar` sobrescrevia um QTDCAN anterior em vez de somar,
@@ -860,14 +974,19 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
                 seqipc=seqipc,
             )
             if not resultado.get("cancelado"):
+                falha_cancelamento = {"seqipc": seqipc, "numocp": oc["numocp"], "seqipo": oc["seqipo"],
+                                      "erro": resultado.get("erro") or "falha desconhecida no webservice",
+                                      # "raw" só existe quando o Sapiens RESPONDEU (recusa de negócio, ex:
+                                      # "OC fechada / Aprovação Multinível"); erro de rede/timeout não tem.
+                                      "recusado": bool(resultado.get("raw"))}
                 registrar_log_acao(
                     numnfc, chvnel, "ERRO",
-                    f"Falha ao cancelar item {seqipc} na OC {oc['numocp']}/{oc['seqipo']} — candidata pulada, tentando a próxima",
-                    f"{len(cancelados)} cancelamento(s) anterior(es) deste item já pode(m) ter sido "
-                    f"aplicado(s) de verdade no Sapiens.",
+                    f"Falha ao cancelar item {seqipc} na OC {oc['numocp']}/{oc['seqipo']} — NF interrompida, nenhuma OC será gerada",
+                    f"{prog['n'] - 1} cancelamento(s) anterior(es) desta NF já aplicado(s) de verdade no Sapiens. "
+                    f"erro={falha_cancelamento['erro']}",
                     seqipc=seqipc,
                 )
-                continue
+                return False, cancelados
             cancelados.append((oc, usar))
         return True, cancelados
 
@@ -879,11 +998,11 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         # livro-caixa aplicado) — só executa aqui, não recalcula.
         ok, cancelados = _cancelar_candidatas(it["seqipc"], it["a_cancelar"])
         if not ok:
-            continue  # item abortado — não entra no acumulador nesta rodada
+            break  # 1ª falha — para a NF inteira (ver falha_cancelamento abaixo)
         total_cancelado = sum(usar for _, usar in cancelados)
         for oc, usar in cancelados:
             ocp_can += f"{oc['numocp']};{oc['seqipo']};{usar}/"
-        ocp_apr += f"{it['codpro_ws']};{it['qtd_rec']}/"
+        ocp_apr +=f"{it['codpro_ws']};{it['qtd_rec']}/"
         produtos_apr.append({"seqipc": it["seqipc"], "codpro": it["codpro_ws"],
                              "profor": it["profor"], "despro": it["despro"],
                              "preuni": it["preuni"], "qtd": it["qtd_rec"]})
@@ -901,11 +1020,13 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # OC é gerada com sucesso, igual ao Juntar_OC (a aprovação em si,
     # SITAPR='APR', é conferida à parte, no nível da NF, não aqui).
     for it in itens_pendente:
+        if falha_cancelamento:
+            break  # já falhou no Juntar_OC — não envia mais nada
         # a_cancelar já foi decidido na Fase 1 (sobre o saldo com o
         # livro-caixa aplicado) — só executa aqui, não recalcula.
         ok, cancelados = _cancelar_candidatas(it["seqipc"], it["a_cancelar"])
         if not ok:
-            continue  # item abortado — não entra no acumulador nesta rodada
+            break  # 1ª falha — para a NF inteira (ver falha_cancelamento abaixo)
         total_cancelado = sum(usar for _, usar in cancelados)
         for oc, usar in cancelados:
             ocp_can += f"{oc['numocp']};{oc['seqipo']};{usar}/"
@@ -919,6 +1040,54 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
                            f"{it['num_linhas']} linha(s) em {it['num_ocp']} OC(s) somam {it['qtd_ocp']} < {it['qtd_rec']} "
                            f"— canceladas {total_cancelado} — OC nova de {it['qtd_rec']} gerada, pendente de aprovação do Junior",
                            seqipc=it["seqipc"])
+
+    # ── Cancelamento falhou: PARA aqui, sem gerar nenhuma OC nova ───────────
+    # Gerar a OC com o saldo antigo ainda ativo duplicaria a quantidade (o
+    # cancelamento é o que libera a demanda antiga). A NF fica em
+    # VERIFICACAO_OC e o scheduler tenta de novo na próxima rodada — a
+    # reconferência recalcula o saldo real, então os cancelamentos que já
+    # deram certo não são repetidos.
+    if falha_cancelamento and falha_cancelamento["recusado"]:
+        # O Sapiens RESPONDEU recusando (OC fechada / Aprovação Multinível...):
+        # repetir a cada minuto não adianta — só o comprador resolve. A NF vai
+        # pra AGUARDANDO_APROVACAO_OC (coluna do Junior), guarda uma "foto" das
+        # linhas de OC que ia cancelar e avisa o Junior UMA vez. A cada rodada
+        # só compara a foto (ver reconferir_oc_pendente) e retoma sozinha se
+        # alguma OC mudar.
+        f = falha_cancelamento
+        linhas_alvo = sorted({(oc["numocp"], oc["seqipo"]) for it in itens_juntar + itens_pendente for oc, _ in it["a_cancelar"]})
+        bloqueio = {
+            "seqipc": f["seqipc"], "numocp": f["numocp"], "seqipo": f["seqipo"], "erro": f["erro"],
+            "linhas": [list(x) for x in linhas_alvo],
+            "assinatura": assinatura_linhas_oc(codemp, codfil, linhas_alvo),
+        }
+        detalhe = (f"Cancelamento recusado pelo Sapiens — item {f['seqipc']}, OC {f['numocp']}/{f['seqipo']}: {f['erro']}. "
+                   f"Nenhuma OC gerada; aguardando o comprador ajustar a OC no Sapiens (a NF retoma sozinha quando ela mudar).")
+        registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC, "Cancelamento recusado — NF parada até a OC mudar", detalhe)
+        _registrar_estagio(dados_nf, AGUARDANDO_APROVACAO_OC, detalhe, referencia={CANCELAMENTO_BLOQUEADO: bloqueio})
+        if not _ja_notificado(numnfc):
+            envio = notificar_junior_cancelamento_bloqueado(numnfc, codfor, nomfor, codemp, codfil, bloqueio)
+            if envio.get("sucesso"):
+                _marcar_notificado(numnfc)
+                registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — cancelamento de OC recusado", detalhe)
+            else:
+                registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — cancelamento recusado", str(envio.get("erro")))
+        print(f"  ⛔ {detalhe}")
+        return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC, "detalhe": detalhe}
+
+    if falha_cancelamento:
+        # Falha SEM resposta do Sapiens (rede/timeout) — transitória: fica em
+        # VERIFICACAO_OC e tenta de novo na próxima rodada.
+        f = falha_cancelamento
+        detalhe = (f"Falha ao cancelar item {f['seqipc']} na OC {f['numocp']}/{f['seqipo']} "
+                   f"({prog['n']}/{prog['total']} cancelamentos tentados) — nenhuma OC gerada, "
+                   f"tenta de novo na próxima rodada. Erro: {f['erro']}")
+        anterior = _buscar_estagio_atual(numnfc)
+        if not anterior or anterior.get("status_interno") != VERIFICACAO_OC or anterior.get("detalhe") != detalhe:
+            registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "Cancelamento falhou — geração de OC abortada", detalhe)
+        _registrar_estagio(dados_nf, VERIFICACAO_OC, detalhe)
+        print(f"  ⛔ {detalhe}")
+        return {"numnfc": numnfc, "resultado": VERIFICACAO_OC, "detalhe": detalhe}
 
     # ── TRAVA 1 (reconferida): algum cancelamento pode ter falhado na Fase 2
     # e abortado o item sem entrar no acumulador — se isso aconteceu, o total
@@ -945,6 +1114,7 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # uma OC duplicada por rodada.
     referencia_oc = {}
     if ocp_apr:
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "Enviando OC consolidada ao webservice", f"{len(produtos_apr)} produto(s)")
         oc_apr = gerar_oc_aprovada_via_webservice(
             codemp, codfil, codfor, produtos_apr,
             observacao=f"OC consolidada (aprovada) p/ NF {numnfc}: {ocp_apr}"[:1000],
@@ -972,6 +1142,7 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
             )
 
     if ocp_pen:
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "Enviando OC pendente ao webservice", f"{len(produtos_pen)} produto(s)")
         oc_pen = gerar_oc_para_aprovacao(
             codemp, codfil, codfor, produtos_pen,
             observacao=f"OC pendente p/ NF {numnfc}: {ocp_pen}"[:1000],
@@ -1013,7 +1184,8 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     if not ocp_apr and not ocp_pen and not numocps_aguardando:
         detalhe = (
             f"Todos os {len(seqipcs)} item(ns) da NF com OC "
-            f"({len(itens_ok)} OK, {itens_ja_vinculados} já vinculado(s)) — "
+            f"({len(itens_ok)} OK, {itens_ja_vinculados} já vinculado(s), "
+            f"{len(itens_recuperados)} religado(s) à OC existente da NF) — "
             f"NF aguardando integração."
         )
         return _marcar_pronta_integracao(dados_nf, detalhe)
@@ -1097,9 +1269,26 @@ def reconferir_oc_pendente(registro: dict) -> dict:
     # precisa de aprovação manual antes de poder ser usada de verdade.
     referencia_oc = registro.get("referencia") or {}
     erros_webservice = referencia_oc.get("erros_webservice") or []
-    numocps = [v for k, v in referencia_oc.items() if v and k != "erros_webservice"]
+    bloqueio = referencia_oc.get(CANCELAMENTO_BLOQUEADO)
+    numocps = [v for k, v in referencia_oc.items() if v and k not in ("erros_webservice", CANCELAMENTO_BLOQUEADO)]
 
     try:
+        if bloqueio:
+            # NF parada porque o Sapiens recusou cancelar uma OC (ver
+            # _rodar_verificacao_oc). Nada de webservice aqui: só compara a
+            # "foto" guardada das linhas de OC com o estado atual (consulta
+            # leve). Igual → continua parada, sem log nem reenvio. Diferente →
+            # o comprador mexeu na OC: reconfere do zero.
+            atual = assinatura_linhas_oc(codemp, codfil, [tuple(x) for x in bloqueio.get("linhas", [])])
+            if atual == bloqueio.get("assinatura"):
+                return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC,
+                        "detalhe": "Cancelamento de OC recusado — aguardando o comprador ajustar a OC no Sapiens"}
+            registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC,
+                               "OC alterada no Sapiens — reconferindo Verificação OC",
+                               f"antes={bloqueio.get('assinatura')} | agora={atual}")
+            print(f"  🔁 NF {numnfc} — OC bloqueada mudou no Sapiens, reconferindo Verificação OC...")
+            return _rodar_verificacao_oc(_dados_nf_do_registro(registro))
+
         if not numocps:
             if erros_webservice:
                 # A geração da OC já falhou no webservice numa rodada
@@ -1212,4 +1401,36 @@ def reconferir_integracao(registro: dict) -> dict:
         registrar_log_acao(numnfc, chvnel, "ERRO", "Exceção na 2ª verificação (integração E440NFC)", str(e))
         print(f" ⚠️ NF {numnfc} - erro na 2ª verificação: {e}")
         return {"numnfc": numnfc, "resultado":"ERRO", "detalhe": str(e)}
+
+
+def reconferir_integrada(registro: dict) -> dict:
+    """
+    Reconferência de uma NF em INTEGRADA (estágio terminal): se ela deixou de
+    constar na E440NFC (foi excluída/estornada no Sapiens depois de integrada),
+    devolve pra VERIFICACAO_OC — o scheduler a reprocessa na rodada seguinte
+    (reprocessar_travada). Os vínculos NUMOCP/SEQIPO da E000IPC continuam
+    valendo, então se as OCs seguem aprovadas e abertas ela volta direto pra
+    AGUARDANDO_INTEGRACAO sem gerar OC nova; se alguma OC morreu, o fluxo
+    normal limpa o vínculo e regenera. NF cancelada nesse meio-tempo cai na
+    trava de INDCAN dentro de _rodar_verificacao_oc (vira CANCELADA).
+
+    Falha de consulta (exceção) não muda nada — a NF permanece INTEGRADA e a
+    próxima rodada tenta de novo.
+    """
+    numnfc, chvnel = registro["numnfc"], registro["chvnel"]
+    codemp, codfil, codfor = registro["codemp"], registro["codfil"], registro["codfor"]
+    try:
+        if nf_consta_e440nfc(codemp, codfil, codfor, numnfc):
+            return {"numnfc": numnfc, "resultado": INTEGRADA, "detalhe": "Continua na E440NFC - permanece"}
+
+        detalhe = "NF estava INTEGRADA mas não consta mais na E440NFC (excluída/estornada no Sapiens) - voltando pra Verificação OC"
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "NF integrada sumiu da E440NFC - voltando pro fluxo", detalhe)
+        _registrar_estagio(_dados_nf_do_registro(registro), VERIFICACAO_OC, detalhe)
+        print(f"  ↩️  NF {numnfc} - {detalhe}")
+        return {"numnfc": numnfc, "resultado": VERIFICACAO_OC, "detalhe": detalhe}
+    except Exception as e:
+        traceback.print_exc()
+        registrar_log_acao(numnfc, chvnel, "ERRO", "Exceção reconferindo NF INTEGRADA (E440NFC)", str(e))
+        print(f"  ⚠️  NF {numnfc} - erro reconferindo INTEGRADA: {e}")
+        return {"numnfc": numnfc, "resultado": "ERRO", "detalhe": str(e)}
 

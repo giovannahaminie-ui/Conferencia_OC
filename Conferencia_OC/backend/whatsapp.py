@@ -171,3 +171,22 @@ def notificar_junior_criar_oc(numnfc: str, codfor: str, nomfor: str,
 
     partes.append("\nPor favor, crie/aprove a OC no Sapiens.")
     return enviar_whatsapp(TELEFONE_JUNIOR, "\n".join(partes))
+
+
+# Etapa "Verificação OC" — o Sapiens recusou cancelar uma OC antiga (ex: "OC já
+# foi fechada e possui Aprovação Multinível"), então a NF não pôde ser
+# consolidada/gerada. Enviada UMA vez por bloqueio (ver nf_processor.py); a NF
+# só é retomada sozinha quando a OC mudar no Sapiens.
+def notificar_junior_cancelamento_bloqueado(numnfc: str, codfor: str, nomfor: str,
+                                            codemp: str, codfil: str, bloqueio: dict) -> dict:
+    empfil = f" · Emp {codemp}/Fil {codfil}" if (codemp or codfil) else ""
+    partes = [
+        f"⛔ *Cancelamento de OC recusado — NF {numnfc}*",
+        f"Fornecedor: {nomfor} ({codfor}){empfil}",
+        f"\nO Sapiens não deixou cancelar a OC *{bloqueio.get('numocp')}* (linha {bloqueio.get('seqipo')}), "
+        f"usada pelo item {bloqueio.get('seqipc')} da NF.",
+        f"Motivo: {bloqueio.get('erro')}",
+        "\nNenhuma OC nova foi gerada. Por favor, ajuste/cancele essa OC no Sapiens — "
+        "o sistema retoma a NF sozinho quando ela mudar.",
+    ]
+    return enviar_whatsapp(TELEFONE_JUNIOR, "\n".join(partes))

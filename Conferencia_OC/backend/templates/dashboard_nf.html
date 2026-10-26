@@ -2011,11 +2011,18 @@ async function abrirModal(ds) {
       html += `<div class="modal-situacao warn"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Itens da NF com divergência de quantidade nas OCs</span></div>`;
     }
 
+    // Status salvo (banner acima) é só o que o fluxo gravou na última rodada;
+    // a lista de itens vem da conferência ao vivo. Se os dois discordam, avisa
+    // em vez de deixar "liberada" (verde) e itens divergentes (vermelho) juntos.
+    if (procStatus === "AGUARDANDO_INTEGRACAO" && d.confirmado && !d.itens_ok) {
+      html += `<div class="modal-situacao warn"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Atenção: o status salvo diz "liberada", mas a conferência ao vivo encontrou ${divItens} item(ns) divergente(s) — veja os itens abaixo antes de importar.</span></div>`;
+    }
+
         // Números de OC pendentes de aprovação (Junior) — evita caçar no
     // histórico/log; copia direto daqui.
     if (procStatus === "AGUARDANDO_APROVACAO_OC") {
       const ocsPendentes = Object.entries(procReferencia)
-        .filter(([chave, val]) => chave !== "erros_webservice" && val)
+        .filter(([chave, val]) => chave !== "erros_webservice" && chave !== "cancelamento_bloqueado" && val)
         .map(([chave, numocp]) => {
           const label = chave === "apr" ? "OC consolidada (Juntar_OC)"
                       : chave === "pen" ? "OC nova (OC_Pendente)"
@@ -2099,7 +2106,9 @@ async function abrirModal(ds) {
                   ${!it.coberto
                     ? (it.fora_portfolio
                         ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> Fora do portfólio do fornecedor</div>`
-                        : (Number(it.qtd_oc_disponivel||0) === 0
+                        : (it.divergencia && it.divergencia.startsWith("OC ")
+                            ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> ${esc(it.divergencia)}</div>`
+                        : Number(it.qtd_oc_disponivel||0) === 0
                             ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> Sem OC para este produto</div>`
                             : `<div class="item-alerta insuf"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> Faltam ${Number(falta).toLocaleString("pt-BR")} un. na OC</div>`))
                     : ""}
