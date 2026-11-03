@@ -53,6 +53,7 @@ separado; a próxima rodada do scheduler tenta de novo.
 
 import json
 import traceback
+from datetime import datetime
 
 from db_local   import get_local_connection, registrar_log_acao
 from oc_service import (
@@ -131,6 +132,15 @@ ESTAGIOS_ATIVOS = (
 # por todo o histórico a cada rodada.
 INTEGRADA_RECONFERIR_DIAS = 3
 
+# Erro do webservice de OC (timeout, Sapiens fora do ar, resposta fora do
+# formato) é, na maior parte das vezes, transitório. Antes a NF ficava parada
+# pra sempre em AGUARDANDO_APROVACAO_OC sem nenhuma OC gerada; agora tenta de
+# novo, espaçado, até este limite — só então fica parada aguardando ação manual.
+MAX_TENTATIVAS_WEBSERVICE      = 5
+INTERVALO_RETRY_WEBSERVICE_MIN = 5
+# Chaves de `referencia` (AGUARDANDO_APROVACAO_OC) que NÃO são um NUMOCP.
+CHAVES_REFERENCIA_NAO_OC = ("erros_webservice", "tentativas_webservice", "cancelamento_bloqueado")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SQLite — estado atual da NF (nf_processamento)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -148,16 +158,17 @@ def _linha_com_info(row: dict) -> dict:
     return row
 
 
-def _buscar_estagio_atual(numnfc: str) -> dict | None:
-    """Última linha de nf_processamento pra essa NF, ou None se nunca vista."""
+def _buscar_estagio_atual(chvnel: str) -> dict | None:
+    """Última linha de nf_processamento pra essa NF (chave CHVNEL — o número da
+    NF repete entre fornecedores/séries), ou None se nunca vista."""
     conn = get_local_connection()
     cur  = conn.cursor()
     cur.execute("""
         SELECT * FROM nf_processamento
-        WHERE numnfc = ?
+        WHERE chvnel = ?
         ORDER BY id DESC
         LIMIT 1
-    """, (numnfc,))
+    """, (str(chvnel),))
     row = cur.fetchone()
     conn.close()
     return _linha_com_info(dict(row)) if row else None
@@ -174,8 +185,8 @@ def listar_nfs_no_estagio(status_interno: str) -> list[dict]:
     cur.execute("""
         SELECT t.* FROM nf_processamento t
         INNER JOIN (
-            SELECT numnfc, MAX(id) AS max_id FROM nf_processamento GROUP BY numnfc
-        ) u ON u.numnfc = t.numnfc AND u.max_id = t.id
+            SELECT chvnel, MAX(id) AS max_id FROM nf_processamento GROUP BY chvnel
+        ) u ON u.chvnel = t.chvnel AND u.max_id = t.id
     """)
     rows = [_linha_com_info(dict(r)) for r in cur.fetchall()]
     conn.close()
@@ -188,9 +199,9 @@ def listar_nfs_ativas() -> list[dict]:
     cur.execute("""
         SELECT t.* FROM nf_processamento t
         INNER JOIN (
-            SELECT numnfc, MAX(id) as MAX_id FROM nf_processamento 
-            GROUP BY numnfc
-            ) u ON u.numnfc = t.numnfc AND u.max_id = t.id 
+            SELECT chvnel, MAX(id) as MAX_id FROM nf_processamento 
+            GROUP BY chvnel
+            ) u ON u.chvnel = t.chvnel AND u.max_id = t.id 
     """)
     rows = [_linha_com_info(dict(r)) for r in cur.fetchall()]
     conn.close()
@@ -203,13 +214,22 @@ def listar_nfs_integradas_recentes(dias: int = INTEGRADA_RECONFERIR_DIAS) -> lis
     cur.execute("""
         SELECT t.* FROM nf_processamento t
         INNER JOIN (
-            SELECT numnfc, MAX(id) AS max_id FROM nf_processamento GROUP BY numnfc
-        ) u ON u.numnfc = t.numnfc AND u.max_id = t.id
+            SELECT chvnel, MAX(id) AS max_id FROM nf_processamento GROUP BY chvnel
+        ) u ON u.chvnel = t.chvnel AND u.max_id = t.id
         WHERE t.criado_em >= strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime', ?)
     """, (f"-{int(dias)} days",))
     rows = [_linha_com_info(dict(r)) for r in cur.fetchall()]
     conn.close()
     return [r for r in rows if r["status_interno"] == INTEGRADA]
+
+def _minutos_desde(criado_em) -> float:
+    """Minutos desde um timestamp 'YYYY-MM-DDTHH:MM:SS' (hora local do SQLite).
+    Timestamp ilegível conta como "faz tempo" pra não bloquear a nova tentativa."""
+    try:
+        return (datetime.now() - datetime.fromisoformat(str(criado_em))).total_seconds() / 60
+    except Exception:
+        return float("inf")
+
 
 def _dados_nf_do_registro(registro: dict) -> dict:
     """Reconstrói o dict de dados da NF a partir de uma linha de nf_processamento."""
@@ -242,6 +262,7 @@ def _registrar_estagio(dados_nf: dict, status_interno: str, detalhe: str = "", r
     têm estágio e não repetir o card ali).
     """
     numnfc = str(dados_nf["numnfc"])
+    chvnel = str(dados_nf.get("chvnel", ""))
     # status grava o nome exato do estágio atual (VERIFICACAO_CADASTRAL,
     # AGUARDANDO_LIGACAO, VERIFICACAO_OC, AGUARDANDO_APROVACAO_OC,
     # AGUARDANDO_INTEGRACAO ou CANCELADA) — dá pra consultar direto por SQL
@@ -256,8 +277,8 @@ def _registrar_estagio(dados_nf: dict, status_interno: str, detalhe: str = "", r
     cur  = conn.cursor()
     cur.execute("""
         SELECT id, divergencias FROM nf_processamento
-        WHERE numnfc = ? ORDER BY id DESC LIMIT 1
-    """, (numnfc,))
+        WHERE chvnel = ? ORDER BY id DESC LIMIT 1
+    """, (chvnel,))
     ultima = cur.fetchone()
 
     mesmo_estagio = False
@@ -315,7 +336,7 @@ def _registrar_estagio(dados_nf: dict, status_interno: str, detalhe: str = "", r
     conn.close()
 
 
-def _marcar_notificado(numnfc: str) -> None:
+def _marcar_notificado(chvnel: str) -> None:
     """Marca a etapa atual da NF como já notificada — chamado logo após
     enviar o WhatsApp, pra bloquear reenvio nas reconferências seguintes
     enquanto ela ficar parada na mesma etapa."""
@@ -323,16 +344,16 @@ def _marcar_notificado(numnfc: str) -> None:
     cur  = conn.cursor()
     cur.execute("""
         UPDATE nf_processamento SET notificado = 1
-         WHERE id = (SELECT id FROM nf_processamento WHERE numnfc = ? ORDER BY id DESC LIMIT 1)
-    """, (str(numnfc),))
+         WHERE id = (SELECT id FROM nf_processamento WHERE chvnel = ? ORDER BY id DESC LIMIT 1)
+    """, (str(chvnel),))
     conn.commit()
     conn.close()
 
 
-def _ja_notificado(numnfc: str) -> bool:
+def _ja_notificado(chvnel: str) -> bool:
     """Confere se a etapa ATUAL da NF já foi notificada (WhatsApp enviado
     uma vez pra esse estágio) — usado pra decidir se reenvia ou não."""
-    atual = _buscar_estagio_atual(numnfc)
+    atual = _buscar_estagio_atual(chvnel)
     return bool(atual and atual.get("notificado"))
 
 
@@ -365,9 +386,13 @@ def processar_nf_nova(nf: dict) -> dict:
     }
     numnfc, chvnel = dados_nf["numnfc"], dados_nf["chvnel"]
 
-    if _buscar_estagio_atual(numnfc):
-        # Segunda camada de segurança — não deveria acontecer, já que
-        # /api/nf/dashboard exclui SITNFC IN (6,3).
+    if not chvnel:
+        return {"numnfc": numnfc, "resultado": "ERRO", "detalhe": "NF sem CHVNEL — não processada"}
+
+    if _buscar_estagio_atual(chvnel):
+        # Chave é o CHVNEL (44 dígitos), não o número da NF: o mesmo número
+        # repete entre fornecedores/séries, e chavear por numnfc fazia a
+        # segunda NF ser ignorada pra sempre (nunca gerava OC).
         return {"numnfc": numnfc, "resultado": "JA_PROCESSADA", "detalhe": ""}
 
     print(f"\n{'─'*60}")
@@ -401,6 +426,16 @@ def _rodar_verificacao_cadastral(dados_nf: dict) -> dict:
     numnfc, chvnel = dados_nf["numnfc"], dados_nf["chvnel"]
     codemp, codfil, codfor = dados_nf["codemp"], dados_nf["codfil"], dados_nf["codfor"]
 
+    # NF sem itens na E000IPC (cabeçalho chegou antes dos itens): as duas
+    # queries abaixo devolveriam lista vazia e a NF passaria como "cadastro
+    # OK" sem nada ter sido conferido. Fica em VERIFICACAO_CADASTRAL até os
+    # itens aparecerem (reprocessar_travada refaz o cadastral do zero).
+    if not listar_seqipc_nf(chvnel):
+        detalhe = "NF sem itens na E000IPC — cadastro não conferido, aguardando os itens."
+        _registrar_estagio(dados_nf, VERIFICACAO_CADASTRAL, detalhe)
+        print(f"  ⏳ {detalhe}")
+        return {"numnfc": numnfc, "resultado": VERIFICACAO_CADASTRAL, "detalhe": detalhe}
+
     itens_fora_portfolio = verificar_portfolio_fornecedor(codemp, codfil, codfor, chvnel)
     # Roda as duas checagens sempre (não para na primeira) pra poder mandar
     # UMA mensagem só ao fiscal com todas as pendências cadastrais da NF —
@@ -410,6 +445,7 @@ def _rodar_verificacao_cadastral(dados_nf: dict) -> dict:
 
     if itens_fora_portfolio or itens_sem_cadastro:
         partes_detalhe = []
+        logs_pendentes = []
         referencia = None
 
         if itens_fora_portfolio:
@@ -417,7 +453,7 @@ def _rodar_verificacao_cadastral(dados_nf: dict) -> dict:
             produtos_txt = ", ".join(str(it.get("profor") or it.get("codpro") or "?") for it in itens_fora_portfolio)
             partes_detalhe.append(f"Produto(s) sem ligação no portfólio deste fornecedor: {produtos_txt}.")
             referencia = profors
-            registrar_log_acao(numnfc, chvnel, VERIFICACAO_CADASTRAL, "Ligação pendente", partes_detalhe[-1])
+            logs_pendentes.append(("Ligação pendente", partes_detalhe[-1]))
 
         if itens_sem_cadastro:
             partes = []
@@ -429,16 +465,25 @@ def _rodar_verificacao_cadastral(dados_nf: dict) -> dict:
                 ) if cond]
                 partes.append(f"{nome} ({it.get('profor') or it.get('codpro') or '—'}): sem {' e sem '.join(faltas)}")
             partes_detalhe.append("Produto(s) com cadastro incompleto: " + "; ".join(partes) + ".")
-            registrar_log_acao(numnfc, chvnel, VERIFICACAO_CADASTRAL, "Cadastro de produto incompleto (derivação/depósito)", partes_detalhe[-1])
+            logs_pendentes.append(("Cadastro de produto incompleto (derivação/depósito)", partes_detalhe[-1]))
 
         detalhe = " ".join(partes_detalhe)
+        # Reconferência a cada rodada: só loga a pendência quando ela é nova
+        # (estágio ou detalhe mudou) — antes gravava uma linha por minuto
+        # (milhares de linhas idênticas no histórico de uma NF parada).
+        anterior = _buscar_estagio_atual(chvnel)
+        repetido = bool(anterior and anterior.get("status_interno") == AGUARDANDO_LIGACAO
+                        and anterior.get("detalhe") == detalhe)
+        if not repetido:
+            for acao, det in logs_pendentes:
+                registrar_log_acao(numnfc, chvnel, VERIFICACAO_CADASTRAL, acao, det)
         _registrar_estagio(dados_nf, AGUARDANDO_LIGACAO, detalhe, referencia=referencia)
-        if not _ja_notificado(numnfc):
+        if not _ja_notificado(chvnel):
             envio = notificar_fiscal_pendencias(numnfc, codfor, dados_nf["nomfor"],
                                                  sem_ligacao=itens_fora_portfolio,
                                                  cadastro_incompleto=itens_sem_cadastro)
             if envio.get("sucesso"):
-                _marcar_notificado(numnfc)
+                _marcar_notificado(chvnel)
                 registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao fiscal — pendência(s) cadastral(is)")
             else:
                 registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao fiscal — pendência(s) cadastral(is)", str(envio.get("erro")))
@@ -651,6 +696,18 @@ def _dividir_candidatas(candidatas, necessario):
     return a_cancelar
 
 
+def _tem_pendencia_cadastral(dados_nf: dict) -> bool:
+    """True se a NF tem item sem ligação no portfólio (E403FPR) ou sem
+    derivação/depósito. Trava usada antes de qualquer geração de OC: o
+    estágio VERIFICACAO_OC só diz que o cadastro foi conferido UMA vez, lá
+    atrás — a ligação pode ter sido removida/trocada depois, ou a NF ter
+    entrado sem itens e passado sem conferência."""
+    codemp, codfil, codfor, chvnel = (dados_nf["codemp"], dados_nf["codfil"],
+                                      dados_nf["codfor"], dados_nf["chvnel"])
+    return bool(verificar_portfolio_fornecedor(codemp, codfil, codfor, chvnel)
+                or verificar_derivacao_deposito(codemp, codfor, chvnel))
+
+
 def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     numnfc, chvnel = dados_nf["numnfc"], dados_nf["chvnel"]
     codemp, codfil, codfor = dados_nf["codemp"], dados_nf["codfil"], dados_nf["codfor"]
@@ -663,6 +720,15 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         _registrar_estagio(dados_nf, VERIFICACAO_OC, detalhe)
         print(f"  ❌ {detalhe}")
         return {"numnfc": numnfc, "resultado": VERIFICACAO_OC, "detalhe": detalhe}
+
+    # ── TRAVA CADASTRAL: nenhuma OC é cancelada/gerada com pendência de
+    # portfólio ou de derivação/depósito. Devolve a NF pro cadastral, que
+    # grava AGUARDANDO_LIGACAO e avisa o fiscal.
+    if _tem_pendencia_cadastral(dados_nf):
+        registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC,
+                           "Pendência cadastral detectada antes de gerar OC — voltando pra Verificação Cadastral")
+        print(f"  ↩️  NF {numnfc} — pendência cadastral antes da Verificação OC, voltando pro cadastral")
+        return _rodar_verificacao_cadastral(dados_nf)
 
     # ── FASE 1: classificar todos os itens — nenhum webservice/gravação ────
     itens_ja_vinculados = 0
@@ -693,7 +759,8 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     linhas_usadas = set()
     itens_recuperados = []   # [{seqipc, numocp, seqipo, qtd_rec, reservado}] — vínculo gravado na Fase 2
     itens_ambiguos = []      # [(seqipc, [numocps])] — NF para sem gerar nada
-    preferidas = [v for k, v in (dados_nf.get("referencia") or {}).items() if k != "erros_webservice"]
+    ref_anterior = dados_nf.get("referencia") if isinstance(dados_nf.get("referencia"), dict) else {}
+    preferidas = [v for k, v in ref_anterior.items() if k not in CHAVES_REFERENCIA_NAO_OC and not isinstance(v, (dict, list))]
 
     for seqipc in seqipcs:
         item = buscar_item_nf(chvnel, seqipc, codfor)
@@ -857,7 +924,7 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         detalhe = (f"{len(itens_ambiguos)} item(ns) com mais de uma OC gerada pra esta NF "
                    f"({', '.join(map(str, numocps_amb))}) — nenhuma OC nova gerada, "
                    f"requer decisão manual (deixar só uma OC no Sapiens).")
-        anterior = _buscar_estagio_atual(numnfc)
+        anterior = _buscar_estagio_atual(chvnel)
         if not anterior or anterior.get("status_interno") != VERIFICACAO_OC or anterior.get("detalhe") != detalhe:
             registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "OC da NF ambígua — geração de OC abortada", detalhe)
         _registrar_estagio(dados_nf, VERIFICACAO_OC, detalhe)
@@ -1065,10 +1132,10 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
                    f"Nenhuma OC gerada; aguardando o comprador ajustar a OC no Sapiens (a NF retoma sozinha quando ela mudar).")
         registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC, "Cancelamento recusado — NF parada até a OC mudar", detalhe)
         _registrar_estagio(dados_nf, AGUARDANDO_APROVACAO_OC, detalhe, referencia={CANCELAMENTO_BLOQUEADO: bloqueio})
-        if not _ja_notificado(numnfc):
+        if not _ja_notificado(chvnel):
             envio = notificar_junior_cancelamento_bloqueado(numnfc, codfor, nomfor, codemp, codfil, bloqueio)
             if envio.get("sucesso"):
-                _marcar_notificado(numnfc)
+                _marcar_notificado(chvnel)
                 registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — cancelamento de OC recusado", detalhe)
             else:
                 registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — cancelamento recusado", str(envio.get("erro")))
@@ -1082,7 +1149,7 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         detalhe = (f"Falha ao cancelar item {f['seqipc']} na OC {f['numocp']}/{f['seqipo']} "
                    f"({prog['n']}/{prog['total']} cancelamentos tentados) — nenhuma OC gerada, "
                    f"tenta de novo na próxima rodada. Erro: {f['erro']}")
-        anterior = _buscar_estagio_atual(numnfc)
+        anterior = _buscar_estagio_atual(chvnel)
         if not anterior or anterior.get("status_interno") != VERIFICACAO_OC or anterior.get("detalhe") != detalhe:
             registrar_log_acao(numnfc, chvnel, VERIFICACAO_OC, "Cancelamento falhou — geração de OC abortada", detalhe)
         _registrar_estagio(dados_nf, VERIFICACAO_OC, detalhe)
@@ -1172,6 +1239,9 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # referencia_oc (chaves "existente_N") pra reconferir_oc_pendente saber
     # quais OCs conferir na próxima rodada, sem chamar o webservice de novo
     # (numocps já não está vazio) e sem a NF pular pra AGUARDANDO_INTEGRACAO.
+    if referencia_oc.get("erros_webservice"):
+        referencia_oc["tentativas_webservice"] = int(ref_anterior.get("tentativas_webservice") or 0) + 1
+
     numocps_aguardando = sorted({it["numocp"] for it in itens_aguardando_aprovacao})
     for idx, n in enumerate(numocps_aguardando):
         referencia_oc[f"existente_{idx}"] = n
@@ -1212,13 +1282,13 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # criar/aprovar a OC no Sapiens. Se o único motivo de estar aqui for
     # itens_aguardando_aprovacao (vínculo já existia, OC já era conhecida do
     # Junior de uma rodada anterior), não há nada NOVO a notificar.
-    if not _ja_notificado(numnfc) and (produtos_apr or produtos_pen):
+    if not _ja_notificado(chvnel) and (produtos_apr or produtos_pen):
         envio = notificar_junior_criar_oc(numnfc, codfor, nomfor,
                                   consolidar=produtos_apr, criar_nova=produtos_pen,
                                   codemp=codemp, codfil=codfil,
                                   numocp_apr=referencia_oc.get("apr"), numocp_pen=referencia_oc.get("pen"))
         if envio.get("sucesso"):
-            _marcar_notificado(numnfc)
+            _marcar_notificado(chvnel)
             registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — OC pendente/consolidar", detalhe)
         else:
             registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — OC pendente/consolidar", str(envio.get("erro")))
@@ -1270,9 +1340,18 @@ def reconferir_oc_pendente(registro: dict) -> dict:
     referencia_oc = registro.get("referencia") or {}
     erros_webservice = referencia_oc.get("erros_webservice") or []
     bloqueio = referencia_oc.get(CANCELAMENTO_BLOQUEADO)
-    numocps = [v for k, v in referencia_oc.items() if v and k not in ("erros_webservice", CANCELAMENTO_BLOQUEADO)]
+    numocps = [v for k, v in referencia_oc.items() if v and k not in CHAVES_REFERENCIA_NAO_OC]
 
     try:
+        # Mesma trava cadastral da Verificação OC: se a ligação do portfólio
+        # (ou derivação/depósito) sumiu depois da OC gerada, a NF não pode
+        # seguir como "aguardando aprovação" — volta pro fiscal.
+        if _tem_pendencia_cadastral(_dados_nf_do_registro(registro)):
+            registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC,
+                               "Pendência cadastral detectada — voltando pra Verificação Cadastral")
+            print(f"  ↩️  NF {numnfc} — pendência cadastral em AGUARDANDO_APROVACAO_OC, voltando pro cadastral")
+            return _rodar_verificacao_cadastral(_dados_nf_do_registro(registro))
+
         if bloqueio:
             # NF parada porque o Sapiens recusou cancelar uma OC (ver
             # _rodar_verificacao_oc). Nada de webservice aqui: só compara a
@@ -1297,7 +1376,21 @@ def reconferir_oc_pendente(registro: dict) -> dict:
                 # a cada 1min. Fica parada aqui até ação manual (ex: corrigir
                 # o motivo do erro e reprocessar), em vez de bater no mesmo
                 # erro indefinidamente.
-                detalhe = "Erro no webservice ao gerar OC — parado, sem nova tentativa automática: " + "; ".join(erros_webservice)
+                tentativas = int(referencia_oc.get("tentativas_webservice") or 0)
+                if tentativas < MAX_TENTATIVAS_WEBSERVICE and _minutos_desde(registro.get("criado_em")) >= INTERVALO_RETRY_WEBSERVICE_MIN:
+                    # _rodar_verificacao_oc consulta as OCs já geradas pra esta
+                    # NF (observação "p/ NF n:") antes de gerar — se a OC chegou
+                    # a ser criada apesar do erro, é religada em vez de duplicada.
+                    registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC,
+                                       f"Nova tentativa de gerar OC ({tentativas + 1}/{MAX_TENTATIVAS_WEBSERVICE}) após erro do webservice",
+                                       "; ".join(erros_webservice))
+                    print(f"  🔁 NF {numnfc} — tentando gerar OC de novo ({tentativas + 1}/{MAX_TENTATIVAS_WEBSERVICE})")
+                    return _rodar_verificacao_oc(_dados_nf_do_registro(registro))
+                if tentativas < MAX_TENTATIVAS_WEBSERVICE:
+                    return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC,
+                            "detalhe": f"Erro no webservice — nova tentativa em até {INTERVALO_RETRY_WEBSERVICE_MIN} min ({tentativas}/{MAX_TENTATIVAS_WEBSERVICE})"}
+                detalhe = (f"Erro no webservice ao gerar OC — {tentativas} tentativa(s) esgotada(s), parado até ação manual: "
+                           + "; ".join(erros_webservice))
                 print(f"  🛑 NF {numnfc} — {detalhe}")
                 return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC, "detalhe": detalhe}
             # Nenhuma OC foi gerada com sucesso ainda (é a primeira passada)
@@ -1336,7 +1429,7 @@ def reconferir_oc_pendente(registro: dict) -> dict:
                                           codemp=codemp, codfil=codfil,
                                           numocp_apr=referencia_oc.get("apr"), numocp_pen=referencia_oc.get("pen"))
                 if envio.get("sucesso"):
-                    _marcar_notificado(numnfc)
+                    _marcar_notificado(chvnel)
                     registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — OC ainda não aprovada")
                     print(f"  ⏳ NF {numnfc} — OC(s) {nao_aprovadas} ainda não aprovada(s), notificando Junior")
                 else:

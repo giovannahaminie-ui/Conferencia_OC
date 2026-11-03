@@ -90,6 +90,9 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_nf_log_numnfc
             ON nf_log_acoes (numnfc);
 
+        CREATE INDEX IF NOT EXISTS idx_nf_log_chvnel
+            ON nf_log_acoes (chvnel);
+
         -- ─────────────────────────────────────────────────────────────────────
         -- Usuários do dashboard (login por codusu — dois níveis: admin/comum).
         -- senha_hash e cor ficam NULL até o primeiro acesso (usuário escolhe

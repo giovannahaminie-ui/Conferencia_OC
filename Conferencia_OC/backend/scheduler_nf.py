@@ -52,7 +52,8 @@ def conferir_nfs():
     print("\n🕐 [Scheduler] Iniciando rodada de conferência...")
 
     resultados: dict[str, int] = {}
-    # NFs já tocadas nesta rodada (por numnfc) — nenhum passo abaixo
+    # NFs já tocadas nesta rodada (por chvnel — o número da NF repete entre
+    # fornecedores) — nenhum passo abaixo
     # reprocessa uma NF que outro passo já tenha processado agora mesmo,
     # mesmo que ela apareça na lista de outro estágio no meio do caminho.
     tocadas: set[str] = set()
@@ -70,8 +71,8 @@ def conferir_nfs():
     print(f"   NFs candidatas (novas ou já vistas): {len(nfs)}")
     for nf in nfs:
         nf_normalizada = {k.lower(): v for k, v in nf.items()}
-        numnfc = str(nf_normalizada.get("numnfc") or "")
-        if numnfc in tocadas:
+        chvnel = str(nf_normalizada.get("chvnel") or "")
+        if chvnel in tocadas:
             continue
         resultado = processar_nf_nova(nf_normalizada)
         s = resultado.get("resultado", "DESCONHECIDO")
@@ -81,35 +82,35 @@ def conferir_nfs():
         # sempre nos passos 2/3/4, mesmo sem nunca ter sido reprocessada de
         # fato. Só marca quando processar_nf_nova realmente executou algo.
         if s != "JA_PROCESSADA":
-            tocadas.add(numnfc)
+            tocadas.add(chvnel)
         resultados[s] = resultados.get(s, 0) + 1
 
     # ── 2. Reconfere ligação pendente (coluna "Aguardando Lig. Produto x Fornecedor") ──
-    pendentes_ligacao = [r for r in listar_nfs_no_estagio(AGUARDANDO_LIGACAO) if str(r["numnfc"]) not in tocadas]
+    pendentes_ligacao = [r for r in listar_nfs_no_estagio(AGUARDANDO_LIGACAO) if str(r["chvnel"]) not in tocadas]
     print(f"   Reconferindo {len(pendentes_ligacao)} NF(s) em AGUARDANDO_LIGACAO...")
     for registro in pendentes_ligacao:
         resultado = reconferir_ligacao_pendente(registro)
-        tocadas.add(str(registro["numnfc"]))
+        tocadas.add(str(registro["chvnel"]))
         s = resultado.get("resultado", "DESCONHECIDO")
         resultados[s] = resultados.get(s, 0) + 1
 
     # ── 3. Reconfere OC pendente (coluna "Aguard. aprovação de OC") ─────
-    pendentes_oc = [r for r in listar_nfs_no_estagio(AGUARDANDO_APROVACAO_OC) if str(r["numnfc"]) not in tocadas]
+    pendentes_oc = [r for r in listar_nfs_no_estagio(AGUARDANDO_APROVACAO_OC) if str(r["chvnel"]) not in tocadas]
     print(f"   Reconferindo {len(pendentes_oc)} NF(s) em AGUARDANDO_APROVACAO_OC...")
     for registro in pendentes_oc:
         resultado = reconferir_oc_pendente(registro)
-        tocadas.add(str(registro["numnfc"]))
+        tocadas.add(str(registro["chvnel"]))
         s = resultado.get("resultado", "DESCONHECIDO")
         resultados[s] = resultados.get(s, 0) + 1
 
     # ── 4. Reprocessa NFs presas em estado de passagem ──────────────────
     travadas_brutas = listar_nfs_no_estagio(VERIFICACAO_CADASTRAL) + listar_nfs_no_estagio(VERIFICACAO_OC)
-    travadas = [r for r in travadas_brutas if str(r["numnfc"]) not in tocadas]
+    travadas = [r for r in travadas_brutas if str(r["chvnel"]) not in tocadas]
     if travadas:
         print(f"   Reprocessando {len(travadas)} NF(s) presa(s) em VERIFICACAO_CADASTRAL/VERIFICACAO_OC...")
     for registro in travadas:
         resultado = reprocessar_travada(registro)
-        tocadas.add(str(registro["numnfc"]))
+        tocadas.add(str(registro["chvnel"]))
         s = resultado.get("resultado", "DESCONHECIDO")
         resultados[s] = resultados.get(s, 0) + 1
 

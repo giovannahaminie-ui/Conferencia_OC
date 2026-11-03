@@ -243,15 +243,15 @@
   /* ── Layout ──────────────────────────────────────────────── */
   .main-layout {
     display: flex; align-items: flex-start;
-    min-height: calc(100vh - 54px);
+    min-height: 100vh;
   }
 
   /* ── Sidebar ─────────────────────────────────────────────── */
   .sidebar {
     width: 236px; flex-shrink: 0;
-    position: sticky; top: 54px;
-    height: calc(100vh - 54px);
-    overflow-y: auto;
+    position: sticky; top: 0; z-index: 40;
+    height: 100vh;
+    overflow: visible;
     background: var(--bg-card);
     border-right: 1px solid var(--border);
     display: flex; flex-direction: column;
@@ -387,134 +387,221 @@
   .sidebar.collapsed .nav-ocalerta-toggle .sidebar-count { margin-left: 0; }
 
   /* ── Board ───────────────────────────────────────────────── */
-  .board-wrap { flex: 1; padding: 16px 16px 52px; min-width: 0; }
+  /* fundo pontilhado discreto, dá "chão" às colunas */
+  .board-wrap {
+    flex: 1; padding: 18px 18px 56px; min-width: 0;
+    background-image: radial-gradient(color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1.3px);
+    background-size: 24px 24px;
+  }
   /* ALTERADO: 6 colunas agora (era 5; +1 "NF pendente importação XML") */
   .board {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 12px; align-items: flex-start;
+    /* o nº de colunas se ajusta sozinho à largura disponível (zoom, janela, menu
+       recolhido): cabem até 6 lado a lado, senão quebram em mais linhas — nunca
+       passam da largura da página */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: 14px; align-items: stretch; min-width: 0;
   }
-  @media (max-width: 1400px) { .board { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 900px)  { .sidebar { display: none; } .board { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 500px)  { .board { grid-template-columns: 1fr; } }
 
-  /* ── Coluna ──────────────────────────────────────────────── */
-  .col { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+  /* ── Coluna (raia) ───────────────────────────────────────── */
+  @keyframes colIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  /* cada coluna ocupa 2 linhas da grade (cabeçalho + cards) e usa as linhas do
+     board em "subgrid": o cabeçalho de todas as colunas fica na mesma linha, com a
+     mesma altura, e as raias terminam alinhadas embaixo */
+  .col {
+    display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 10px; min-width: 0;
+    grid-template-columns: minmax(0, 1fr);   /* a coluna nunca cresce além da raia por causa do conteúdo */
+    padding: 8px; border-radius: 22px;
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--col-color) 10%, transparent) 0%,
+      color-mix(in srgb, var(--col-color) 3%, transparent) 55%,
+      transparent 100%);
+    border: 1px solid color-mix(in srgb, var(--col-color) 15%, var(--border));
+    animation: colIn .6s var(--ease) both;
+  }
+  .col:nth-child(2) { animation-delay: .06s; }
+  .col:nth-child(3) { animation-delay: .12s; }
+  .col:nth-child(4) { animation-delay: .18s; }
+  .col:nth-child(5) { animation-delay: .24s; }
+  .col:nth-child(6) { animation-delay: .30s; }
+  .col > [id^="cards-"] { display: flex; flex-direction: column; gap: 10px; }
 
   .col-head {
+    position: relative; overflow: hidden;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 12px;
+    border-radius: 16px; padding: 13px 13px 12px;
     box-shadow: var(--shadow);
     display: flex; align-items: flex-start;
     justify-content: space-between; gap: 6px;
-    border-top: 2.5px solid var(--col-color);
-    transition: box-shadow 0.2s var(--ease);
+    transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease);
   }
-  .col-head:hover { box-shadow: var(--shadow-hover); }
+  .col-head::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, var(--col-color), color-mix(in srgb, var(--col-color) 35%, #fff));
+  }
+  .col-head::after {          /* brilho colorido no canto */
+    content: ""; position: absolute; right: -34px; top: -34px; width: 110px; height: 110px;
+    border-radius: 50%; pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--col-color) 20%, transparent), transparent);
+  }
+  .col-head:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+  .col-head > * { position: relative; z-index: 1; }
   .col-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .col-icon {
-    width: 24px; height: 24px; border-radius: 7px;
-    background: color-mix(in srgb, var(--col-color) 14%, var(--bg-card));
-    border: 1.5px solid color-mix(in srgb, var(--col-color) 35%, transparent);
+    width: 26px; height: 26px; border-radius: 9px;
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--col-color) 24%, var(--bg-card)),
+      color-mix(in srgb, var(--col-color) 8%, var(--bg-card)));
+    border: 1px solid color-mix(in srgb, var(--col-color) 32%, transparent);
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; font-size: 11px;
+    flex-shrink: 0; font-size: 12px;
+    transition: transform 0.3s cubic-bezier(.22,1.2,.36,1);
   }
-  .col-title { font-size: 0.77rem; font-weight: 700; color: var(--text); line-height: 1.25; letter-spacing: -0.005em; }
+  .col-head:hover .col-icon { transform: rotate(-8deg) scale(1.1); }
+  .col-title { font-size: 0.78rem; font-weight: 750; color: var(--text); line-height: 1.25; letter-spacing: -0.01em; }
   .col-sub {
-    font-size: 0.58rem; color: var(--text-faint);
-    margin-top: 2px; line-height: 1.35;
+    font-size: 0.62rem; color: var(--text-faint);
+    margin-top: 3px; line-height: 1.4; margin-left: 34px !important;
   }
   .col-badge {
-    font-size: 0.66rem; font-weight: 700;
-    padding: 2px 9px; border-radius: 20px;
-    background: color-mix(in srgb, var(--col-color) 12%, var(--bg-card));
-    color: var(--col-color);
-    border: 1px solid color-mix(in srgb, var(--col-color) 30%, transparent);
-    flex-shrink: 0;
+    min-width: 26px; text-align: center;
+    font-size: 0.7rem; font-weight: 800;
+    padding: 3px 9px; border-radius: 20px;
+    background: var(--col-color); color: #fff; border: none;
+    box-shadow: 0 5px 12px -4px color-mix(in srgb, var(--col-color) 70%, transparent);
+    flex-shrink: 0; font-variant-numeric: tabular-nums;
     transition: transform 0.2s var(--ease);
   }
+  .col-head:hover .col-badge { transform: scale(1.08); }
 
   /* ── Card ────────────────────────────────────────────────── */
   @keyframes cardIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to   { opacity: 1; transform: none; }
   }
+  @keyframes acaoGlowOk   { 0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.30); }  60% { box-shadow: 0 0 0 6px rgba(22,163,74,0); } }
+  @keyframes acaoGlowRed  { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.32); }  60% { box-shadow: 0 0 0 6px rgba(220,38,38,0); } }
+  @keyframes tempoPulse   { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
   .nf-card {
+    position: relative; overflow: hidden; min-width: 0; max-width: 100%;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius);
-    border-left: 3px solid var(--col-color);
-    padding: 11px 12px; cursor: pointer;
-    box-shadow: var(--shadow);
-    transition: box-shadow 0.22s var(--ease), transform 0.22s var(--ease), border-color 0.22s var(--ease);
-    animation: cardIn 0.28s var(--ease) both;
+    border-radius: 16px;
+    padding: 13px 14px 13px 18px; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 6px 14px -8px rgba(15,23,42,0.12);
+    transition: box-shadow 0.3s var(--ease), transform 0.3s cubic-bezier(.22,1.2,.36,1), border-color 0.3s var(--ease);
+    animation: cardIn 0.5s cubic-bezier(.22,1.2,.36,1) both;
+  }
+  .nf-card:nth-child(2) { animation-delay: .05s; }
+  .nf-card:nth-child(3) { animation-delay: .10s; }
+  .nf-card:nth-child(4) { animation-delay: .15s; }
+  .nf-card:nth-child(5) { animation-delay: .20s; }
+  .nf-card:nth-child(6) { animation-delay: .25s; }
+  .nf-card:nth-child(7) { animation-delay: .30s; }
+  .nf-card:nth-child(n+8) { animation-delay: .35s; }
+  .nf-card::before {          /* filete lateral na cor da etapa */
+    content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px;
+    border-radius: 0 5px 5px 0;
+    background: linear-gradient(180deg, var(--col-color), color-mix(in srgb, var(--col-color) 40%, #fff));
+    transition: top 0.3s var(--ease), bottom 0.3s var(--ease);
+  }
+  .nf-card::after {           /* reflexo que atravessa o card no hover */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--col-color) 11%, transparent) 50%, transparent 62%);
+    transform: translateX(-130%);
+    transition: transform 0.75s var(--ease);
   }
   .nf-card:hover {
-    box-shadow: var(--shadow-hover);
-    transform: translateY(-2px);
-    border-left-width: 4px;
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--col-color) 42%, var(--border));
+    box-shadow: 0 16px 30px -14px color-mix(in srgb, var(--col-color) 55%, transparent), 0 2px 6px rgba(15,23,42,0.06);
   }
-  .nf-card:active { transform: translateY(-1px); transition-duration: 0.06s; }
+  .nf-card:hover::before { top: 8px; bottom: 8px; }
+  .nf-card:hover::after  { transform: translateX(130%); }
+  .nf-card:active { transform: translateY(-1px) scale(0.995); transition-duration: 0.08s; }
+  :root[data-theme="dark"] .nf-card { box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 18px -8px rgba(0,0,0,0.55); }
+  @media (prefers-reduced-motion: reduce) {
+    .col, .nf-card { animation: none; }
+    .nf-card::after { display: none; }
+  }
 
   .nf-card-top {
     display: flex; align-items: center;
-    justify-content: space-between; gap: 6px; margin-bottom: 3px;
+    justify-content: space-between; gap: 6px; margin-bottom: 8px;
   }
-  .nf-num { font-size: 0.76rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
-  .nf-num::before { content: "NF "; color: var(--text-faint); font-weight: 400; font-size: 0.65rem; }
+  .nf-num { font-size: 0.88rem; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+  .nf-num::before { content: "NF "; color: var(--text-faint); font-weight: 600; font-size: 0.64rem; letter-spacing: 0.04em; }
   .nf-tempo {
-    font-size: 0.6rem; font-weight: 600;
-    padding: 1px 6px; border-radius: 20px;
-    background: var(--bg-subtle); color: var(--text-faint); flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.62rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px;
+    background: var(--bg-subtle); color: var(--text-dim); flex-shrink: 0;
+    border: 1px solid var(--border);
     transition: background 0.2s var(--ease), color 0.2s var(--ease);
   }
-  .nf-tempo.atencao { background: #fffbeb; color: #d97706; }
-  .nf-tempo.urgente { background: #fef2f2; color: #dc2626; }
+  .nf-tempo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .nf-tempo.atencao { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+  .nf-tempo.urgente { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+  .nf-tempo.urgente::before { animation: tempoPulse 1.3s ease-in-out infinite; }
 
   .nf-for {
-    font-size: 0.7rem; color: var(--text-dim);
+    font-size: 0.74rem; font-weight: 600; color: var(--text);
     white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; line-height: 1.35; min-width: 0;
   }
-  .nf-divider { height: 1px; background: var(--border); margin: 6px 0; }
+  .nf-divider { height: 1px; margin: 9px 0 8px; background: repeating-linear-gradient(90deg, var(--border) 0 5px, transparent 5px 9px); }
 
   .nf-card-meta {
     display: flex; align-items: center;
     justify-content: space-between; gap: 4px; flex-wrap: wrap;
   }
-  .nf-valor { font-size: 0.71rem; font-weight: 700; color: #16a34a; letter-spacing: -0.005em; }
+  .nf-valor { font-size: 0.88rem; font-weight: 800; color: #16a34a; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
-  .nf-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .nf-chips { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
   .chip {
-    display: inline-flex; align-items: center; gap: 3px;
-    font-size: 0.61rem; color: var(--text-faint);
-    background: var(--bg-subtle); padding: 2px 7px;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.63rem; font-weight: 500; color: var(--text-dim);
+    background: var(--bg-subtle); padding: 3px 8px;
     border-radius: 20px; border: 1px solid var(--border);
-    transition: border-color 0.16s var(--ease);
+    transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
   }
-  .nf-card:hover .chip { border-color: var(--border-strong); }
-  .chip.destaque { color: var(--text-dim); font-weight: 600; }
+  .nf-card:hover .chip { border-color: color-mix(in srgb, var(--col-color) 30%, var(--border)); }
+  .chip.destaque { color: var(--text); font-weight: 650; }
 
   /* banner de próximo passo no card */
   .nf-acao {
-    margin-top: 7px; padding: 5px 9px;
-    border-radius: var(--radius-sm); font-size: 0.63rem; font-weight: 600;
-    display: flex; align-items: center; gap: 4px;
+    margin-top: 10px; padding: 7px 10px;
+    border-radius: 10px; font-size: 0.66rem; font-weight: 700;
+    display: flex; align-items: center; gap: 5px; line-height: 1.35;
   }
-  .nf-acao.importar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-  .nf-acao.urgente  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-  .nf-acao.aguardar { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+  .nf-acao.importar { background: linear-gradient(90deg, #f0fdf4, #ecfdf5); color: #15803d; border: 1px solid #bbf7d0; animation: acaoGlowOk 2.8s ease-out infinite; }
+  .nf-acao.urgente  { background: linear-gradient(90deg, #fef2f2, #fff1f2); color: #dc2626; border: 1px solid #fecaca; animation: acaoGlowRed 2.4s ease-out infinite; }
+  .nf-acao.aguardar { background: linear-gradient(90deg, #fffbeb, #fefce8); color: #b45309; border: 1px solid #fde68a; }
 
   /* ── Coluna vazia / loading ──────────────────────────────── */
   .col-empty {
-    background: repeating-linear-gradient(-45deg, var(--bg-subtle) 0 10px, var(--bg-card) 10px 20px);
-    border: 1.5px dashed var(--border);
-    border-radius: var(--radius); padding: 20px 10px;
-    text-align: center; font-size: 0.68rem; color: var(--text-faint);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--col-color) 4%, var(--bg-subtle)) 0 10px, transparent 10px 20px);
+    border: 1.5px dashed color-mix(in srgb, var(--col-color) 28%, var(--border));
+    border-radius: 16px; padding: 22px 10px;
+    text-align: center; font-size: 0.7rem; font-weight: 500; color: var(--text-faint);
   }
+  @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  .col-empty::before {
+    content: "✓"; width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 800; color: var(--col-color);
+    background: color-mix(in srgb, var(--col-color) 12%, var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--col-color) 30%, transparent);
+    animation: floatY 3.2s ease-in-out infinite;
+  }
+  @keyframes shimmer { from { background-position: 130% 0; } to { background-position: -130% 0; } }
   .col-loading {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px; text-align: center;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 96px; border: 1px solid var(--border); border-radius: 16px; padding: 18px; text-align: center;
+    background: linear-gradient(100deg, var(--bg-card) 30%, var(--bg-subtle) 50%, var(--bg-card) 70%);
+    background-size: 220% 100%; animation: shimmer 1.6s linear infinite;
   }
+  .col-loading .spinner { margin: 0 auto; }
   .spinner {
     width: 16px; height: 16px;
     border: 2px solid var(--border);
@@ -542,9 +629,9 @@
   /* ── Modal ───────────────────────────────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(15,20,35,0.44); backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-    z-index: 200; display: flex; align-items: center; justify-content: center;
+    background: rgba(15,23,42,0.38); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 200; display: flex; align-items: stretch; justify-content: flex-end;
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity 0.22s var(--ease), visibility 0s linear 0.22s;
   }
@@ -552,90 +639,139 @@
     opacity: 1; visibility: visible; pointer-events: auto;
     transition: opacity 0.22s var(--ease), visibility 0s linear 0s;
   }
+  /* Painel lateral — abre pela direita, altura total da tela */
   .modal {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 14px; width: min(620px, 95vw); max-height: 88vh;
+    background: var(--bg-subtle); border: none;
+    border-radius: 24px 0 0 24px; width: min(660px, 100vw); height: 100vh; max-height: 100vh;
     display: flex; flex-direction: column; overflow: hidden;
-    box-shadow: var(--shadow-lg);
-    transform: translateY(10px) scale(0.98);
-    transition: transform 0.24s var(--ease);
+    box-shadow: -30px 0 80px -20px rgba(15,23,42,0.35);
+    transform: translateX(100%);
+    transition: transform 0.38s cubic-bezier(.22,.8,.24,1);
   }
-  .modal-overlay.open .modal { transform: translateY(0) scale(1); }
-  .modal-stripe { height: 4px; background: linear-gradient(90deg, var(--col-color, #4c8dae), color-mix(in srgb, var(--col-color, #4c8dae) 55%, #fff)); }
+  .modal-overlay.open .modal { transform: translateX(0); }
+  .modal-stripe { height: 4px; flex-shrink: 0; }
   .modal-header {
-    padding: 15px 20px;
+    padding: 20px 22px 16px;
     border-bottom: 1px solid var(--border);
     display: flex; align-items: flex-start;
     justify-content: space-between; gap: 12px;
-    background: var(--bg-subtle);
+    background: var(--bg-card);
   }
-  .modal-nf-num { font-size: 1.02rem; font-weight: 750; color: var(--text); margin-bottom: 2px; letter-spacing: -0.01em; }
-  .modal-fornecedor { font-size: 0.76rem; color: var(--text-dim); }
+  .modal-nf-num { font-size: 1.3rem; font-weight: 800; color: var(--text); margin-bottom: 4px; letter-spacing: -0.02em; }
+  .modal-fornecedor { font-size: 0.72rem; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
   .modal-close {
-    background: var(--bg-card); border: 1px solid var(--border);
-    color: var(--text-dim); border-radius: 7px;
-    width: 27px; height: 27px; cursor: pointer;
+    background: var(--bg-subtle); border: none;
+    color: var(--text-dim); border-radius: 50%;
+    width: 34px; height: 34px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.8rem; flex-shrink: 0;
-    transition: border-color 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease), background 0.18s var(--ease);
+    font-size: 0.85rem; flex-shrink: 0;
+    transition: color 0.18s var(--ease), transform 0.18s var(--ease), background 0.18s var(--ease);
   }
-  .modal-close:hover { border-color: var(--red); color: var(--red); background: #fef2f2; transform: rotate(90deg); }
-  .modal-body { overflow-y: auto; flex: 1; }
+  .modal-close:hover { color: var(--red); background: #fef2f2; transform: rotate(90deg); }
+  .modal-body {
+    overflow-y: auto; flex: 1;
+    padding: 18px 18px 36px;
+    display: flex; flex-direction: column; gap: 16px;
+    scrollbar-width: thin;
+  }
+  /* entrada escalonada do conteúdo */
+  @keyframes modalItemIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .modal-body > * { animation: modalItemIn .45s var(--ease) both; }
+  .modal-body > :nth-child(2) { animation-delay: .04s; }
+  .modal-body > :nth-child(3) { animation-delay: .08s; }
+  .modal-body > :nth-child(4) { animation-delay: .12s; }
+  .modal-body > :nth-child(5) { animation-delay: .16s; }
+  .modal-body > :nth-child(6) { animation-delay: .20s; }
+  .modal-body > :nth-child(n+7) { animation-delay: .24s; }
+  @media (prefers-reduced-motion: reduce) { .modal-body > * { animation: none; } .modal { transition: none; } }
 
-  /* banner de situação no topo do modal */
+  /* banner de situação no topo do painel */
   .modal-situacao {
-    padding: 11px 20px;
-    display: flex; align-items: center; gap: 10px;
-    font-size: 0.74rem; font-weight: 600;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 0.8rem; font-weight: 600; line-height: 1.45;
+    border: 1px solid transparent; border-radius: 16px;
   }
-  .modal-situacao.ok     { background: #f0fdf4; color: #166534; }
-  .modal-situacao.warn   { background: #fffbeb; color: #92400e; }
-  .modal-situacao.erro   { background: #fef2f2; color: #991b1b; }
-  .modal-situacao.info   { background: #eff6ff; color: #1e40af; }
-  .modal-situacao-icon   { font-size: 1.1rem; }
+  .modal-situacao.ok     { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+  .modal-situacao.warn   { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+  .modal-situacao.erro   { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+  .modal-situacao.info   { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+  /* ícone do banner dentro de um "chip" arredondado na cor do aviso */
+  .modal-situacao-icon {
+    width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; justify-content: center;
+    background: color-mix(in srgb, currentColor 14%, transparent); font-size: 1.05rem;
+  }
 
   .modal-resumo {
-    display: flex; align-items: center; gap: 9px;
-    padding: 12px 20px; background: var(--bg-subtle);
-    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    display: flex; align-items: stretch; gap: 10px;
+    padding: 0; background: none; border: none; flex-wrap: wrap;
   }
   .resumo-stat {
-    display: flex; flex-direction: column; align-items: center;
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 8px 15px; min-width: 72px; gap: 2px;
-    box-shadow: var(--shadow-xs);
+    --tint: var(--text-faint);
+    flex: 1 1 0; min-width: 84px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--tint) 7%, var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--tint) 22%, var(--border));
+    border-radius: 18px; padding: 16px 8px 14px; gap: 6px;
     transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
   }
-  .resumo-stat:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
-  .resumo-stat .rs-val { font-size: 1.08rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
-  .resumo-stat .rs-lbl { font-size: 0.58rem; color: var(--text-faint); text-align: center; }
-  .resumo-stat.ok  .rs-val { color: #16a34a; }
-  .resumo-stat.div .rs-val { color: #dc2626; }
-  .resumo-stat.neu .rs-val { color: #0891b2; }
+  .resumo-stat:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .resumo-stat .rs-val { font-size: 1.85rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+  .resumo-stat .rs-lbl { font-size: 0.68rem; font-weight: 600; color: var(--text-dim); text-align: center; }
+  .resumo-stat.ok  { --tint: #16a34a; } .resumo-stat.ok  .rs-val { color: #16a34a; }
+  .resumo-stat.div { --tint: #dc2626; } .resumo-stat.div .rs-val { color: #dc2626; }
+  .resumo-stat.neu { --tint: #0891b2; } .resumo-stat.neu .rs-val { color: #0891b2; }
+  .resumo-stat.apr { --tint: #d97706; } .resumo-stat.apr .rs-val { color: #d97706; }
+  /* "Último processamento" — cartão em largura total, com filete na cor de destaque */
+  .modal-resumo > div:not(.resumo-stat) {
+    flex: 1 1 100% !important; min-width: 0 !important;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-1); border-radius: 14px;
+    padding: 13px 16px !important; font-size: 0.76rem !important; line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .modal-resumo > div:not(.resumo-stat) strong { color: var(--text) !important; }
 
-  .modal-section { padding: 13px 20px; border-bottom: 1px solid var(--border); }
+  .modal-section { padding: 0; border-bottom: none; }
   .modal-section:last-child { border-bottom: none; }
   .modal-section-title {
-    font-size: 0.62rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.07em;
-    color: var(--text-faint); margin-bottom: 10px;
+    display: flex; align-items: center;
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-dim); margin-bottom: 12px;
   }
+  .modal-section-title::before {
+    content: ""; flex-shrink: 0; width: 3px; height: 12px; border-radius: 3px; margin-right: 8px;
+    background: var(--accent-grad);
+  }
+  /* avisos coloridos (fundo escrito no HTML) viram cartões arredondados */
+  .modal-section[style*="background"] {
+    padding: 14px 16px; border-radius: 16px !important; margin: 0 !important;
+    border: 1px solid color-mix(in srgb, #be185d 22%, transparent);
+  }
+  .modal-section[style*="background:#fffbeb"] { border-color: color-mix(in srgb, #d97706 32%, transparent); }
+  .modal-section[style*="background"] .modal-section-title { margin-bottom: 8px; }
+  .modal-section[style*="background"] .modal-section-title::before { display: none; }
 
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .info-item { display: flex; flex-direction: column; gap: 2px; }
-  .info-label { font-size: 0.6rem; color: var(--text-faint); font-weight: 500; }
-  .info-value { font-size: 0.76rem; color: var(--text); font-weight: 500; }
+  .info-grid {
+    display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px 20px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 20px 22px; box-shadow: var(--shadow-xs);
+  }
+  .info-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .info-label { font-size: 0.66rem; color: var(--text-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .info-value { font-size: 0.88rem; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 
   .oc-box {
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    margin-bottom: 8px; overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 16px;
+    margin-bottom: 10px; overflow: hidden; box-shadow: var(--shadow-xs);
     transition: border-color 0.16s var(--ease);
   }
   .oc-box:hover { border-color: var(--border-strong); }
   .oc-box:last-child { margin-bottom: 0; }
   .oc-box-head {
-    display: flex; align-items: center;
+    display: flex; align-items: center; flex-wrap: wrap;
     justify-content: space-between; gap: 8px;
     padding: 9px 12px; background: var(--bg-subtle);
     cursor: pointer; font-size: 0.73rem;
@@ -643,37 +779,68 @@
   }
   .oc-box-head:hover { background: #f1f4f9; }
   .oc-box-head .oc-num { color: #7c6fcf; font-weight: 700; }
-  .oc-box-head .oc-meta { color: var(--text-faint); font-size: 0.63rem; }
-  .oc-box-body { padding: 0 10px 8px; }
+  .oc-box-head .oc-meta { color: var(--text-dim); font-size: 0.74rem; font-weight: 500; }
+  .oc-box-body { padding: 0 14px 10px; }
   .oc-itens-header {
-    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    gap: 4px; padding: 6px 4px; font-size: 0.59rem;
-    color: var(--text-faint); font-weight: 600;
-    border-bottom: 1px solid var(--border); margin-bottom: 3px;
+    display: grid; grid-template-columns: minmax(0,2.4fr) repeat(4, minmax(0,1fr));
+    gap: 8px; padding: 12px 6px 9px; font-size: 0.66rem;
+    color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-strong); margin-bottom: 2px;
   }
   .oc-item-row {
-    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    gap: 4px; align-items: start;
-    padding: 6px 4px; font-size: 0.7rem;
-    border-bottom: 1px solid #f0f2f5;
+    display: grid; grid-template-columns: minmax(0,2.4fr) repeat(4, minmax(0,1fr));
+    gap: 8px; align-items: start;
+    padding: 11px 6px; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.14s var(--ease);
   }
+  .oc-item-row:hover { background: var(--bg-subtle); }
   .oc-item-row:last-child { border-bottom: none; }
+  .oc-prod { color: var(--text); font-weight: 600; line-height: 1.35; word-break: break-word; }
+  .oc-cod  { color: var(--text-dim); font-size: 0.72rem; margin-top: 2px; font-family: var(--mono); }
+  .oc-n    { text-align: right; color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .oc-n.un { color: var(--text-dim); }
+  .oc-saldo { font-weight: 700; color: #6d5fc7; }
+  .oc-saldo.zero { color: var(--text-dim); }
+  .oc-vazio { font-size: 0.8rem; color: var(--text-dim); padding: 8px 6px; }
+  .item-ocs { font-size: 0.72rem; color: var(--text-dim); margin-top: 5px; font-weight: 500; }
 
+  /* Histórico de ações — linhas mais legíveis */
+  .log-lista { max-height: 440px; overflow-y: auto; padding-right: 4px; }
+  .log-row { display: flex; gap: 11px; padding: 11px 4px; border-bottom: 1px solid var(--border); }
+  .log-row:last-child { border-bottom: none; }
+  .log-ico {
+    width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .log-corpo { flex: 1; min-width: 0; }
+  .log-acao { font-size: 0.86rem; font-weight: 650; line-height: 1.35; }
+  .log-seq  { font-weight: 500; font-size: 0.78rem; color: var(--text-dim); }
+  .log-det  { margin-top: 3px; font-size: 0.8rem; line-height: 1.5; color: var(--text-dim); word-break: break-word; }
+  .log-hora { flex-shrink: 0; font-size: 0.74rem; font-weight: 500; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* cinzas do painel mais escuros (e, no tema escuro, mais claros) — melhor contraste de leitura */
+  :root:not([data-theme="dark"]) .modal { --text-dim: #3f495f; --text-faint: #646e88; }
+  :root[data-theme="dark"] .modal { --text-dim: #c4cde0; --text-faint: #9aa7c2; }
+
+  /* cabeçalho de colunas (Produto / Qtd NF / Qtd na OC) — o painel usa cartões sem cabeçalho */
+  .modal-section > div[style*="grid-template-columns:2fr 1fr 1fr auto"] { display: none !important; }
   .item-row {
-    display: grid; grid-template-columns: 2fr 1fr 1fr auto;
-    gap: 6px; align-items: center;
-    padding: 9px 12px; background: var(--bg-subtle);
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    margin-bottom: 6px; font-size: 0.72rem;
+    display: grid; grid-template-columns: minmax(0,1fr) 40px 40px auto;
+    gap: 10px; align-items: center;
+    padding: 14px 16px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 16px;
+    margin-bottom: 10px; font-size: 0.74rem; box-shadow: var(--shadow-xs);
     transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
   }
   .item-row:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); }
   .item-row:last-child { margin-bottom: 0; }
-  .item-row.divergente { border-left: 3px solid #fecaca; background: #fffafa; }
-  .item-prod { color: var(--text); word-break: break-word; white-space: normal; }
-  .item-cod  { font-size: 0.6rem; color: var(--text-faint); margin-top: 1px; }
-  .item-qtd  { font-size: 0.7rem; color: var(--text-dim); text-align: right; }
-  .item-oc   { font-size: 0.7rem; text-align: right; font-weight: 600; }
+  .item-row.divergente { border: 1px solid color-mix(in srgb, #dc2626 26%, transparent); border-left: 4px solid #f87171; background: color-mix(in srgb, #dc2626 5%, var(--bg-card)); }
+  .item-prod { color: var(--text); font-weight: 700; font-size: 0.84rem; word-break: break-word; white-space: normal; }
+  .item-cod  { font-size: 0.74rem; color: var(--text-dim); margin-top: 3px; }
+  .item-qtd  { font-size: 0.78rem; color: var(--text-dim); text-align: right; font-weight: 600; }
+  .item-oc   { font-size: 0.78rem; text-align: right; font-weight: 700; }
   .item-oc.ok  { color: #16a34a; }
   .item-oc.nok { color: #dc2626; }
   .item-alerta {
@@ -681,6 +848,7 @@
     margin-top: 4px; padding: 2px 7px;
     border-radius: 5px; font-size: 0.63rem; font-weight: 600;
   }
+  .item-alerta { border-radius: 999px; padding: 3px 9px; }
   .item-alerta.sem-oc  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
   .item-alerta.insuf   { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
   .item-alerta.consolidada { background: #eff6ff; color: #0891b2; border: 1px solid #bae6fd; }
@@ -717,74 +885,99 @@
     /* ── Login — ocupa a tela inteira, dividido em dois painéis ── */
   .login-overlay {
     position: fixed; inset: 0; z-index: 300; display: none;
+    background: #f6f4fc;
   }
   .login-overlay.open { display: flex; }
 
   .login-box {
-    width: 100%; height: 100%;
-    display: flex; overflow: hidden;
-    background: linear-gradient(150deg, var(--accent-1) 0%, color-mix(in srgb, var(--accent-1), var(--accent-2)) 55%, var(--accent-2) 100%);
-    animation: loginIn .5s var(--ease);
+    /* o login é sempre claro e usa a paleta da marca (roxo → vermelho) só aqui dentro */
+    --bg-card: #ffffff; --bg-subtle: #f8f7fd;
+    --border: #e4e0f0; --border-strong: #d3cde6;
+    --text: #241b4d; --text-dim: #5d5782; --text-faint: #9a95b6;
+    --accent-1: #4a2a8a; --accent-2: #dc1a32;
+    --accent-grad: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+    --focus-ring: 0 0 0 3px rgba(74,42,138,0.16);
+    position: relative; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 24px;
+    padding: 30px 20px 76px; overflow-y: auto; overflow-x: hidden;
+    background:
+      radial-gradient(900px 520px at 50% 0%, rgba(255,255,255,0.95), transparent 65%),
+      linear-gradient(135deg, #fbfaff 0%, #f3f0fb 55%, #eeeaf8 100%);
+    color: var(--text);
+    animation: loginIn .6s var(--ease);
   }
   @keyframes loginIn {
     from { opacity: 0; transform: scale(1.01); }
     to   { opacity: 1; transform: none; }
   }
 
-  /* painel de marca (esquerda) — ocupa a altura toda da tela */
+  /* decoração: faixas roxo/vermelho nos cantos e o redemoinho da logo ao fundo */
+  .login-swoosh { position: fixed; z-index: 0; width: min(36vw, 500px); height: auto; pointer-events: none; }
+  .login-swoosh.tl { top: 0; left: 0; }
+  .login-swoosh.br { bottom: 0; right: 0; transform: rotate(180deg); }
+  .login-swirl {
+    position: fixed; z-index: 0; pointer-events: none;
+    left: -5vw; top: 50%; width: min(48vw, 680px); aspect-ratio: 900 / 795;
+    transform: translateY(-50%);
+    background: url("/static/redemoinho_tiete.png") center / contain no-repeat;
+    opacity: 0.13;
+  }
+
+  /* cabeçalho: logo, título e caminho */
   .login-brand {
-    position: relative; z-index: 1; flex: 1 1 42%;
-    padding: 48px clamp(28px, 6vw, 72px);
-    display: flex; flex-direction: column; justify-content: space-between;
-    color: #fff;
-    overflow: hidden;
+    position: relative; z-index: 1; flex: none; margin-top: auto; padding: 0;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
   }
-  .login-brand::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background:
-      radial-gradient(480px 260px at 90% 10%, rgba(255,255,255,0.16), transparent 60%),
-      radial-gradient(420px 240px at 0% 100%, rgba(0,0,0,0.14), transparent 55%);
+  .login-swirl.r { left: auto; right: -5vw; }
+  .login-brand-logo-img { width: min(290px, 66vw); height: auto; display: block; margin-bottom: 22px; }
+  .login-brand-title { font-size: clamp(1.6rem, 3vw, 2.05rem); line-height: 1.12; color: var(--text); letter-spacing: -0.01em; }
+  .login-brand-title span { display: block; font-weight: 400; }
+  .login-brand-title b    { display: block; font-weight: 800; }
+  .login-brand-sub {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 14px; font-size: 0.84rem; color: var(--text-dim);
   }
-  .login-brand > * { position: relative; z-index: 1; }
-  /* marca d'água decorativa — mesmo ícone do selo, ampliado e discreto */
-  .login-brand-watermark {
-    position: absolute; right: -70px; bottom: -70px; z-index: 0;
-    width: min(420px, 60vw); height: min(420px, 60vw);
-    opacity: 0.10; transform: rotate(-8deg);
-    pointer-events: none;
-  }
-  .login-brand-logo {
-    width: 42px; height: 42px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
-  }
-  .login-brand-logo .icon { width: 22px; height: 22px; }
-  .login-brand-title { font-size: clamp(1.7rem, 2.6vw, 2.3rem); font-weight: 800; letter-spacing: -0.02em; margin-top: 22px; line-height: 1.15; }
-  .login-brand-sub   { font-size: 0.92rem; opacity: 0.88; margin-top: 10px; line-height: 1.55; max-width: 32ch; }
-  .login-brand-foot  {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em; opacity: 0.85;
-  }
-  .login-brand-foot .icon { width: 14px; height: 14px; flex-shrink: 0; }
+  .login-brand-sub b { color: var(--text); font-weight: 700; }
+  .login-brand-sub svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .login-brand-sub .sep { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; }
 
-  /* painel do formulário (direita) — curva "mordendo" o painel colorido */
+  /* rodapé: linhas dos dois lados */
+  .login-brand-foot {
+    position: fixed; z-index: 1; left: 50%; bottom: 22px; transform: translateX(-50%);
+    width: min(540px, 90vw); display: flex; align-items: center; gap: 14px;
+    font-size: 0.66rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint);
+  }
+  .login-brand-foot .ln { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #cfc8e6); }
+  .login-brand-foot .ln:last-child { background: linear-gradient(270deg, transparent, #cfc8e6); }
+  .login-brand-foot .tx { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .login-brand-foot .icon { width: 15px; height: 15px; color: var(--accent-1); }
+
+  /* cartão do formulário */
   .login-form-panel {
-    position: relative; z-index: 2; flex: 1 1 58%;
-    background: var(--bg-card);
-    border-radius: clamp(60px, 12vw, 220px) 0 0 clamp(60px, 12vw, 220px);
-    margin-left: -100px;
-    padding: 40px clamp(28px, 6vw, 80px) 40px calc(clamp(28px, 6vw, 80px) + 100px);
-    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
-    box-shadow: -24px 0 50px -12px rgba(15,23,42,.18);
-    overflow-y: auto;
+    position: relative; z-index: 2; flex: none; margin-bottom: auto; width: min(470px, 100%);
+    background: #fff; border: 1px solid #ebe7f6; border-radius: 20px;
+    padding: 32px 36px 32px;
+    box-shadow: 0 30px 70px -30px rgba(52,28,110,0.32), 0 4px 14px rgba(52,28,110,0.06);
   }
-  .login-form-inner { width: 100%; max-width: 400px; }
-  .login-title { font-size: 1.3rem; font-weight: 750; margin-bottom: 3px; letter-spacing: -0.01em; }
-  .login-sub   { font-size: 0.8rem; color: var(--text-faint); margin-bottom: 20px; line-height: 1.5; }
+  .login-form-panel::before {
+    content: ""; position: absolute; top: -1px; left: 22px; width: 46%; height: 3px;
+    border-radius: 0 0 4px 4px; background: var(--accent-grad);
+  }
+  .login-form-inner { width: 100%; }
+  .login-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .login-title-ico {
+    width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #5b34a8, #8a4fd1);
+  }
+  .login-title { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .login-sub   { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; }
 
-  .login-steps { display: flex; gap: 6px; margin-bottom: 20px; }
-  .login-steps i { height: 3px; flex: 1; border-radius: 3px; background: var(--border-strong); transition: background .25s var(--ease); }
-  .login-steps i.on { background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); }
+  /* barra de etapas: uma linha só, preenchida em degradê roxo → vermelho */
+  .login-steps { display: flex; gap: 0; margin: 14px 0 20px; }
+  .login-steps i { height: 2px; flex: 1; background: #ddd8ec; transition: background .25s var(--ease); }
+  .login-steps i.on:nth-child(1) { background: linear-gradient(90deg, #4a2a8a, #b3173f); }
+  .login-steps i.on:nth-child(2) { background: linear-gradient(90deg, #b3173f, #dc1a32); }
 
   /* ícones inline (sprite #icon-*) — herdam a cor do texto ao redor */
   .icon { width: 17px; height: 17px; flex-shrink: 0; }
@@ -810,41 +1003,46 @@
   .modal-situacao-icon { display: flex; align-items: center; }
 
   /* círculo com as iniciais do fornecedor, no card do board */
-  .nf-for-row { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 6px; }
+  .nf-for-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .nf-for-avatar {
-    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.56rem; font-weight: 700; color: #fff; letter-spacing: -0.02em;
+    font-size: 0.6rem; font-weight: 800; color: #fff; letter-spacing: -0.02em;
+    box-shadow: 0 0 0 2px var(--bg-card), 0 3px 8px -2px rgba(15,23,42,0.35);
   }
 
   /* inputs escopados no login — não mexem nos outros modais */
   .login-box .field { margin-bottom: 14px; }
-  .login-box .field label { font-size: 0.72rem; }
+  .login-box .field label { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text); }
+  .login-box .field label svg { width: 14px; height: 14px; color: #a3267a; }
   .login-box .field input {
-    font-size: 0.88rem; padding: 12px 14px 12px 40px; border-radius: 999px;
-    width: 100%;
+    font-size: 0.92rem; padding: 13px 16px 13px 52px; border-radius: 12px;
+    width: 100%; background: #fbfaff; border: 1px solid #ded9ee;
   }
+  .login-box .field input:focus { border-color: var(--accent-1); }
   .login-box .input-wrap { position: relative; display: flex; align-items: center; }
   .login-box .input-wrap input { flex: 1; }
-  .login-box .input-wrap:has(.pw-toggle) input { padding-right: 42px; }
+  .login-box .input-wrap:has(.pw-toggle) input { padding-right: 46px; }
   .login-box .input-wrap .field-icon {
-    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-    display: flex; color: var(--text-faint); pointer-events: none;
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #ece9f7; color: #7d70ad; pointer-events: none;
   }
   .login-box .pw-toggle {
-    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
     width: 30px; height: 30px; border: none; background: transparent; cursor: pointer;
     color: var(--text-faint); border-radius: 999px;
     display: flex; align-items: center; justify-content: center;
     transition: background .15s var(--ease), color .15s var(--ease);
   }
-  .login-box .pw-toggle:hover { background: var(--border); color: var(--text-dim); }
+  .login-box .pw-toggle:hover { background: #ece9f7; color: var(--text-dim); }
   .login-box .pw-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .login-box .btn {
-    padding: 12px 20px; font-size: 0.8rem; border-radius: 999px;
-    letter-spacing: 0.02em; text-transform: uppercase; font-weight: 700;
+    padding: 13px 20px; font-size: 0.92rem; border-radius: 12px; font-weight: 650;
   }
-  .login-box .btn.primary { box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-1) 55%, transparent); }
+  .login-box .btn.primary { box-shadow: 0 14px 26px -12px rgba(220,26,50,0.55); }
+  .login-box .btn.primary:hover { box-shadow: 0 16px 30px -12px rgba(220,26,50,0.65); }
   .login-box .btn .icon { width: 15px; height: 15px; }
 
   .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -856,18 +1054,13 @@
   .color-dot.selected { border-color: var(--text); box-shadow: 0 0 0 2px #fff inset; }
 
   @media (max-width: 820px) {
-    .login-box { flex-direction: column; overflow-y: auto; }
-    .login-brand { flex: 0 0 auto; padding: 32px 28px 28px; }
-    .login-brand-title { font-size: 1.4rem; margin-top: 14px; }
-    .login-brand-sub { max-width: none; }
-    .login-brand-foot { display: none; }
-    .login-brand-watermark { display: none; }
-    .login-form-panel {
-      flex: 1 1 auto; border-radius: 26px 26px 0 0; margin: -26px 0 0;
-      padding: 32px 28px 40px; box-shadow: 0 -18px 40px -16px rgba(15,23,42,.18);
-      align-items: stretch;
-    }
-    .login-form-inner { max-width: none; }
+    .login-box { padding-top: 34px; padding-bottom: 28px; gap: 20px; }
+    .login-swoosh { width: 72vw; }
+    .login-swirl { width: 90vw; left: -28vw; opacity: 0.12; }
+    .login-swirl.r { left: auto; right: -28vw; }
+    .login-form-panel { padding: 24px 22px; }
+    .login-form-panel { margin-bottom: 0; padding: 22px 20px; }
+    .login-brand-foot { position: static; transform: none; width: 100%; margin-bottom: auto; }
   }
 
   /* ── Header: usuário / sino / CRM ────────────────────────── */
@@ -979,6 +1172,107 @@
   .crm-rank-bar { height: 100%; border-radius: 4px; transition: width 0.4s var(--ease); }
   .crm-rank-total { font-size: 1rem; font-weight: 800; min-width: 24px; text-align: right; flex-shrink: 0; }
 
+  /* ── Pop-up: Relatório de OC ─────────────────────────────── */
+  .rel-overlay { align-items: center; padding: 20px 16px; background: rgba(15,23,42,0.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  @keyframes relIn { from { opacity: 0; transform: translateY(18px) scale(0.96); } to { opacity: 1; transform: none; } }
+  .rel-box {
+    width: min(540px, 100%); background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 24px; overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    animation: relIn .45s cubic-bezier(.22,1.2,.36,1) both;
+  }
+  .rel-head {
+    position: relative; display: flex; align-items: center; gap: 14px; padding: 22px 24px 18px;
+    background:
+      radial-gradient(420px 160px at 100% -20%, color-mix(in srgb, var(--accent-1) 16%, transparent), transparent 70%),
+      var(--bg-card);
+    border-bottom: 1px solid var(--border);
+  }
+  .rel-ico {
+    width: 46px; height: 46px; border-radius: 15px; flex-shrink: 0; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-grad);
+    box-shadow: 0 12px 22px -10px color-mix(in srgb, var(--accent-1) 85%, transparent);
+  }
+  .rel-ico svg { width: 24px; height: 24px; }
+  .rel-ttl { flex: 1; min-width: 0; }
+  .rel-ttl h3 { font-size: 1.08rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .rel-ttl p  { font-size: 0.74rem; color: var(--text-dim); margin-top: 2px; }
+  .rel-body { padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; }
+  .rel-note {
+    display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px;
+    font-size: 0.76rem; line-height: 1.5; color: var(--text-dim);
+    background: color-mix(in srgb, var(--accent-1) 8%, var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--accent-1) 22%, var(--border));
+  }
+  .rel-note .icon-inline { color: var(--accent-1); margin-top: 2px; }
+  .rel-note b { color: var(--text); }
+  .rel-lbl { font-size: 0.66rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-top: 6px; }
+  .rel-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rel-chips button {
+    font: inherit; font-size: 0.76rem; font-weight: 650; cursor: pointer;
+    padding: 8px 14px; border-radius: 999px; color: var(--text-dim);
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    transition: all .18s var(--ease), transform .18s cubic-bezier(.22,1.2,.36,1);
+  }
+  .rel-chips button:hover { border-color: var(--accent-1); color: var(--accent-1); transform: translateY(-2px); }
+  .rel-chips button.on {
+    color: #fff; border-color: transparent; background: var(--accent-grad);
+    box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--accent-1) 85%, transparent);
+  }
+  .rel-dates { display: flex; align-items: flex-end; gap: 10px; }
+  .rel-dates label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: 0.72rem; font-weight: 650; color: var(--text-dim); }
+  .rel-arrow { padding-bottom: 11px; color: var(--text-faint); font-weight: 700; }
+  .rel-in {
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 13px;
+    background: var(--bg-subtle); border: 1px solid var(--border-strong); color: var(--text-faint);
+    transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
+  }
+  .rel-in:focus-within { border-color: var(--accent-1); background: var(--bg-card); box-shadow: var(--focus-ring); color: var(--accent-1); }
+  .rel-in input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--text); }
+  .rel-sum { font-size: 0.78rem; font-weight: 650; color: var(--text); padding: 2px 2px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rel-sum .pill {
+    font-size: 0.66rem; font-weight: 800; padding: 2px 9px; border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-1) 14%, var(--bg-card)); color: var(--accent-1);
+  }
+  @keyframes relMsgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .rel-msg {
+    align-items: flex-start; gap: 10px; padding: 11px 13px; border-radius: 14px;
+    font-size: 0.78rem; font-weight: 600; line-height: 1.45;
+    border: 1px solid transparent; animation: relMsgIn .3s var(--ease) both;
+  }
+  .rel-msg.ok    { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+  .rel-msg.erro  { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+  .rel-msg.warn  { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+  .rel-msg.load  { background: color-mix(in srgb, var(--accent-1) 8%, var(--bg-card)); color: var(--text); border-color: color-mix(in srgb, var(--accent-1) 25%, var(--border)); flex-direction: column; align-items: stretch; }
+  :root[data-theme="dark"] .rel-msg.ok   { background: color-mix(in srgb, #16a34a 18%, var(--bg-card)); color: #86efac; border-color: color-mix(in srgb, #16a34a 45%, transparent); }
+  :root[data-theme="dark"] .rel-msg.erro { background: color-mix(in srgb, #dc2626 18%, var(--bg-card)); color: #fca5a5; border-color: color-mix(in srgb, #dc2626 45%, transparent); }
+  :root[data-theme="dark"] .rel-msg.warn { background: color-mix(in srgb, #d97706 18%, var(--bg-card)); color: #fbbf24; border-color: color-mix(in srgb, #d97706 45%, transparent); }
+  .rel-msg .m-row { display: flex; gap: 10px; align-items: flex-start; }
+  .rel-msg .icon-inline { flex-shrink: 0; margin-top: 1px; }
+  @keyframes relBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+  .rel-prog { height: 5px; border-radius: 5px; background: color-mix(in srgb, var(--accent-1) 16%, var(--bg-subtle)); overflow: hidden; margin-top: 9px; }
+  .rel-prog i { display: block; width: 30%; height: 100%; border-radius: 5px; background: var(--accent-grad); animation: relBar 1.2s ease-in-out infinite; }
+  .rel-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px 22px; }
+  .rel-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: inherit; font-size: 0.84rem; font-weight: 700; cursor: pointer; border-radius: 13px; padding: 12px 20px;
+    transition: transform .18s cubic-bezier(.22,1.2,.36,1), box-shadow .18s var(--ease), opacity .18s var(--ease), border-color .18s var(--ease);
+  }
+  .rel-btn.ghost { background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); }
+  .rel-btn.ghost:hover { border-color: var(--text-faint); color: var(--text); }
+  .rel-btn.primary {
+    min-width: 168px; border: none; color: #fff; background: var(--accent-grad);
+    box-shadow: 0 14px 24px -12px color-mix(in srgb, var(--accent-1) 90%, transparent);
+  }
+  .rel-btn.primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 18px 28px -12px color-mix(in srgb, var(--accent-1) 95%, transparent); }
+  .rel-btn.primary:active:not(:disabled) { transform: translateY(0); }
+  .rel-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .rel-btn-ico { width: 17px; height: 17px; }
+  .rel-btn.busy .rel-btn-ico { animation: spin .8s linear infinite; }
+  @media (max-width: 480px) { .rel-dates { flex-direction: column; align-items: stretch; } .rel-arrow { display: none; } .rel-foot .rel-btn { flex: 1; } }
+  @media (prefers-reduced-motion: reduce) { .rel-box, .rel-msg, .rel-prog i { animation: none; } }
+
   /* ═══ Sidebar como menu de navegação (estilo app) ═══════════ */
   .sidebar-nav { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
   .nav-item {
@@ -1025,7 +1319,9 @@
   }
   .sidebar-foot .pulse-dot { flex-shrink: 0; }
     /* ── Recolher / expandir a sidebar ───────────────────────── */
-  .sidebar { transition: width 0.22s var(--ease); }
+  /* sem animar a largura: ela re-calcula o board inteiro a cada quadro e deixava o
+     expandir/recolher lento — a troca agora é instantânea */
+  .sidebar { transition: none; }
   .sidebar-toggle {
     display: flex; align-items: center; justify-content: flex-end;
     width: 100%; padding: 8px 14px 2px; background: transparent; border: none;
@@ -1139,6 +1435,58 @@
 
   @media (max-width: 900px) {
     .user-trigger .user-nome { display: none; }
+  }
+
+  /* ═══ Sidebar: logo + sino no topo, usuário embaixo (sem cabeçalho na tela) ═══ */
+  .sidebar-top { display: flex; align-items: center; gap: 8px; padding: 14px 12px 10px; flex-shrink: 0; position: relative; }
+  .sidebar-top .heading-mark { width: 34px; height: 34px; border-radius: 11px; }
+  .sidebar-top .header-pos { margin-left: auto; }
+  .sidebar-top .sidebar-toggle { width: auto; padding: 6px 8px; border-radius: 8px; flex-shrink: 0; }
+  .sidebar-top .sidebar-toggle:hover { background: var(--bg-subtle); }
+  .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+  .sidebar .bell-panel { top: calc(100% + 10px); left: 0; right: auto; }
+
+  .sidebar-user { padding: 10px 10px 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar .user-menu { width: 100%; }
+  .sidebar .user-trigger {
+    width: 100%; padding: 7px 10px 7px 7px; border-radius: 14px; gap: 10px;
+    background: var(--bg-subtle);
+  }
+  .sidebar .user-trigger:hover { border-color: var(--accent-1); background: var(--bg-card); }
+  .sidebar .user-avatar { width: 32px; height: 32px; font-size: 0.78rem; }
+  .sidebar .user-trigger .user-nome { flex: 1; min-width: 0; text-align: left; font-size: 0.78rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sidebar .user-pop { top: auto; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 224px; transform-origin: bottom left; }
+  .sidebar-foot { border-top: none; background: transparent; padding-top: 2px; }
+
+  /* menu recolhido */
+  .sidebar.collapsed .sidebar-top { flex-direction: column; padding: 12px 6px 8px; gap: 8px; }
+  .sidebar.collapsed .sidebar-top .header-pos { margin-left: 0; }
+  .sidebar.collapsed .sidebar-user { padding: 8px 6px; }
+  .sidebar.collapsed .user-trigger { justify-content: center; padding: 5px; }
+  .sidebar.collapsed .user-trigger .user-nome,
+  .sidebar.collapsed .user-trigger .chev { display: none; }
+  .sidebar.collapsed .sidebar-scroll { overflow-x: hidden; }
+
+  /* telas estreitas: a barra lateral vira uma faixa no topo (logo, sino e usuário) */
+  @media (max-width: 900px) {
+    .main-layout { flex-direction: column; }
+    .sidebar { width: 100% !important; height: auto; flex-direction: row; align-items: center; border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar-scroll, .sidebar-foot, .sidebar-toggle { display: none; }
+    .sidebar-top { flex: 1; padding: 8px 14px; }
+    .sidebar-top .header-pos { margin-left: auto; }
+    .sidebar-user { border-top: none; padding: 8px 14px 8px 0; }
+    .sidebar .user-menu { width: auto; }
+    .sidebar .user-trigger { width: auto; padding: 4px; }
+    .sidebar .user-trigger .user-nome, .sidebar .user-trigger .chev { display: none; }
+    .sidebar .user-pop { top: calc(100% + 8px); bottom: auto; left: auto; right: 0; }
+    .sidebar .bell-panel { left: auto; right: -60px; max-width: calc(100vw - 24px); }
+  }
+
+  /* sem suporte a subgrid: volta ao empilhamento simples (cabeçalhos com altura mínima igual) */
+  @supports not (grid-template-rows: subgrid) {
+    .col { display: flex; flex-direction: column; gap: 10px; grid-row: auto; }
+    .col-head { min-height: 132px; }
+    .board { align-items: flex-start; }
   }
 </style>
 </head>
@@ -1289,6 +1637,10 @@
     <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="m4.5 12.5 5 5L19.5 7"/>
     </symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="15.5" r="3.6"/>
+      <path d="m10.7 13 8-8M15.5 7.5l2.6 2.6M13 10l2.2 2.2"/>
+    </symbol>
   </defs>
 </svg>
 
@@ -1316,24 +1668,41 @@
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
 
+    <svg class="login-swoosh tl" viewBox="0 0 640 320" aria-hidden="true">
+      <defs>
+        <linearGradient id="lgPtl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b1263"/><stop offset="1" stop-color="#5a2fa6"/></linearGradient>
+        <linearGradient id="lgRtl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e11d48"/><stop offset="1" stop-color="#c8102e"/></linearGradient>
+      </defs>
+      <path d="M0 0H470C330 38 140 95 0 205Z" fill="url(#lgPtl)"/>
+      <path d="M492 0H566C402 54 172 132 0 256V224C152 112 344 46 492 0Z" fill="url(#lgRtl)"/>
+    </svg>
+    <svg class="login-swoosh br" viewBox="0 0 640 320" aria-hidden="true">
+      <defs>
+        <linearGradient id="lgPbr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b1263"/><stop offset="1" stop-color="#5a2fa6"/></linearGradient>
+        <linearGradient id="lgRbr" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e11d48"/><stop offset="1" stop-color="#c8102e"/></linearGradient>
+      </defs>
+      <path d="M0 0H470C330 38 140 95 0 205Z" fill="url(#lgPbr)"/>
+      <path d="M492 0H566C402 54 172 132 0 256V224C152 112 344 46 492 0Z" fill="url(#lgRbr)"/>
+    </svg>
+    <div class="login-swirl" aria-hidden="true"></div>
+    <div class="login-swirl r" aria-hidden="true"></div>
+
     <aside class="login-brand">
-      <svg class="login-brand-watermark" viewBox="0 0 24 24" aria-hidden="true">
-        <use href="#icon-brand"></use>
-      </svg>
-      <div class="login-brand-logo"><svg class="icon" viewBox="0 0 24 24"><use href="#icon-brand"></use></svg></div>
-      <div>
-        <div class="login-brand-title">Conferência<br>Ordem de Compra</div>
-        <div class="login-brand-sub">Notas Fiscais × Ordens de Compra — Fiscal / Compras</div>
-      </div>
-      <div class="login-brand-foot">
-        <svg class="icon" viewBox="0 0 24 24"><use href="#icon-shield"></use></svg>
-        Grupo Tietê · acesso interno
+      <img class="login-brand-logo-img" src="/static/logo_tiete_recortada.png" alt="Grupo Tietê">
+      <div class="login-brand-title"><span>Conferência</span><b>Ordem de Compra</b></div>
+      <div class="login-brand-sub">
+        <svg viewBox="0 0 24 24"><use href="#icon-file"></use></svg>
+        <b>Notas Fiscais</b>
+        <svg class="sep" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        <span>Ordens de Compra</span>
+        <svg class="sep" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        <span>Fiscal / Compras</span>
       </div>
     </aside>
 
     <div class="login-form-panel">
      <div class="login-form-inner">
-      <div class="login-title">Entrar</div>
+      <div class="login-title-row"><span class="login-title-ico"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span><div class="login-title" id="loginTitle">Entrar</div></div>
       <div class="login-sub" id="loginSub">Informe seu código de usuário pra continuar.</div>
 
       <div class="login-steps" id="loginSteps"><i class="on"></i><i></i></div>
@@ -1343,10 +1712,10 @@
       <!-- Passo 1: codusu -->
       <div id="loginPassoCodusu">
         <div class="field">
-          <label>Código de usuário</label>
+          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Código de usuário</label>
           <div class="input-wrap">
             <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span>
-            <input type="text" id="loginCodusu" autocomplete="off" placeholder="ex: 675">
+            <input type="text" id="loginCodusu" autocomplete="off" placeholder="Ex: 675">
           </div>
         </div>
         <div class="btn-row">
@@ -1360,7 +1729,7 @@
       <!-- Passo 2a: senha -->
       <div id="loginPassoSenha" style="display:none">
         <div class="field">
-          <label>Senha</label>
+          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Senha</label>
           <div class="input-wrap">
             <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
             <input type="password" id="loginSenha" autocomplete="off">
@@ -1391,7 +1760,7 @@
           </div>
         </div>
         <div class="field">
-          <label>Crie uma senha</label>
+          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Crie uma senha</label>
           <div class="input-wrap">
             <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
             <input type="password" id="loginNovaSenha" autocomplete="off">
@@ -1417,6 +1786,12 @@
       </div>
      </div>
     </div>
+
+    <div class="login-brand-foot">
+      <span class="ln"></span>
+      <span class="tx">Grupo Tietê · <svg class="icon" viewBox="0 0 24 24"><use href="#icon-shield"></use></svg> Acesso interno</span>
+      <span class="ln"></span>
+    </div>
   </div>
 </div>
 
@@ -1440,89 +1815,85 @@
 </div>
 
 <!-- Relatório de OC — escolher período (admin) -->
-<div class="crm-overlay" id="relOcOverlay">
-  <div class="crm-box" style="width:min(420px,100%)">
-    <div class="crm-head">
-      <div>
-        <strong style="font-size:0.88rem;display:inline-flex;align-items:center;gap:6px"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-file"></use></svg> Relatório de OC geradas e aprovadas</strong>
-        <div style="font-size:0.66rem;color:var(--text-faint);margin-top:2px">Escolha o período (por padrão, somente hoje).</div>
+<div class="crm-overlay rel-overlay" id="relOcOverlay">
+  <div class="rel-box" role="dialog" aria-modal="true" aria-labelledby="relTitulo">
+    <div class="rel-head">
+      <span class="rel-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5M9 13l4 5M13 13l-4 5"/></svg></span>
+      <div class="rel-ttl">
+        <h3 id="relTitulo">Relatório de OC</h3>
+        <p>OCs geradas para aprovação e aprovadas</p>
       </div>
-      <button class="modal-close" id="relOcClose">✕</button>
+      <button class="modal-close" id="relOcClose" aria-label="Fechar">✕</button>
     </div>
-    <div style="padding:16px 20px 8px;display:flex;gap:12px;flex-wrap:wrap">
-      <label style="flex:1;min-width:130px;font-size:0.72rem;color:var(--text-dim)">
-        De
-        <input type="date" id="relOcDe" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);font:inherit">
-      </label>
-      <label style="flex:1;min-width:130px;font-size:0.72rem;color:var(--text-dim)">
-        Até
-        <input type="date" id="relOcAte" style="width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);font:inherit">
-      </label>
+
+    <div class="rel-body">
+      <div class="rel-note">
+        <svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-info"></use></svg>
+        <span>O relatório é baixado em <b>Excel (.xlsx)</b>. Por padrão ele traz somente as OCs de <b>hoje</b> — escolha outro período abaixo se precisar.</span>
+      </div>
+
+      <div class="rel-lbl">Período rápido</div>
+      <div class="rel-chips" id="relChips">
+        <button type="button" data-r="hoje">Hoje</button>
+        <button type="button" data-r="ontem">Ontem</button>
+        <button type="button" data-r="7">Últimos 7 dias</button>
+        <button type="button" data-r="30">Últimos 30 dias</button>
+        <button type="button" data-r="mes">Este mês</button>
+      </div>
+
+      <div class="rel-lbl">Ou escolha as datas</div>
+      <div class="rel-dates">
+        <label>
+          <span>De</span>
+          <div class="rel-in"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-calendar"></use></svg><input type="date" id="relOcDe"></div>
+        </label>
+        <span class="rel-arrow">→</span>
+        <label>
+          <span>Até</span>
+          <div class="rel-in"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-calendar"></use></svg><input type="date" id="relOcAte"></div>
+        </label>
+      </div>
+
+      <div class="rel-sum" id="relSum"></div>
+      <div class="rel-msg" id="relMsg" role="status" aria-live="polite" style="display:none"></div>
     </div>
-    <div style="padding:8px 20px 20px;display:flex;justify-content:flex-end">
-      <button id="relOcGerar" style="border:none;border-radius:7px;padding:9px 18px;font:inherit;font-weight:600;cursor:pointer;background:#2E5496;color:#fff">Gerar Excel</button>
+
+    <div class="rel-foot">
+      <button type="button" class="rel-btn ghost" id="relOcCancelar">Cancelar</button>
+      <button type="button" class="rel-btn primary" id="relOcGerar">
+        <svg class="rel-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 11 12 15.5 16.5 11M5 20h14"/></svg>
+        <span id="relOcGerarTxt">Gerar Excel</span>
+      </button>
     </div>
   </div>
 </div>
-
-<header>
-  <div class="heading-block">
-    <div class="heading-mark">
-      <svg viewBox="0 0 24 24" fill="none">
-        <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
-        <path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
-        <path d="M8.5 12.5h7M8.5 15.5h7M8.5 9.5h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <div>
-      <h1>Conferência <span class="accent">Ordem de Compra</span></h1>
-      <div class="subtitle">Notas Fiscais × Ordens de Compra — Fiscal / Compras</div>
-    </div>
-  </div>
-  <div class="header-actions">
-    <div class="header-pos">
-      <button class="bell-btn" id="bellBtn"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg><span class="bell-count" id="bellCount">0</span></button>
-      <div class="bell-panel" id="bellPanel">
-        <div class="bell-panel-head">Notificações</div>
-        <div id="bellItems"></div>
-      </div>
-    </div>
-
-    <div class="user-menu" id="userMenu" style="display:none">
-      <button class="user-trigger" id="userTrigger">
-        <span class="user-avatar" id="userAvatar">?</span>
-        <span class="user-nome" id="userNome"></span>
-        <span class="chev">▾</span>
-      </button>
-      <div class="user-pop" id="userPop">
-        <div class="pop-title">Aparência</div>
-        <button class="pop-item" id="popTrocarCor"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-palette"></use></svg> Trocar minha cor</button>
-        <div class="pop-swatches" id="popMinhaCor" style="display:none"></div>
-        <button class="pop-item" id="popCorTela"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-monitor"></use></svg> Cor da tela</button>
-        <div id="popTela" style="display:none">
-          <div class="pop-sub-title">Tema</div>
-          <div class="pop-theme-row" id="popTemaRow">
-            <button type="button" data-tema="claro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-sun"></use></svg> Claro</button>
-            <button type="button" data-tema="escuro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-moon"></use></svg> Escuro</button>
-          </div>
-          <div class="pop-sub-title">Cor de destaque</div>
-          <div class="pop-swatches" id="popAccent"></div>
-        </div>
-        <div class="pop-sep"></div>
-        <button class="pop-item danger" id="popSair"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-logout"></use></svg> Sair</button>
-      </div>
-    </div>
-  </div>
-</header>
 
 <div class="main-layout">
 
     <!-- Sidebar (menu de navegação) -->
   <aside class="sidebar" id="sidebar">
 
-    <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu" aria-label="Recolher menu">
-      <span class="st-ico">«</span>
-    </button>
+    <div class="sidebar-top">
+      <div class="heading-mark" title="Conferência Ordem de Compra">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M8.5 12.5h7M8.5 15.5h7M8.5 9.5h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="header-pos">
+        <button class="bell-btn" id="bellBtn"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg><span class="bell-count" id="bellCount">0</span></button>
+        <div class="bell-panel" id="bellPanel">
+          <div class="bell-panel-head">Notificações</div>
+          <div id="bellItems"></div>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu" aria-label="Recolher menu">
+        <span class="st-ico">«</span>
+      </button>
+    </div>
+
+    <div class="sidebar-scroll">
 
     <div class="sidebar-nav">
       <button class="nav-item active" id="navBoard" title="Board">
@@ -1562,6 +1933,35 @@
       </div>
     </div>
 
+    </div>
+
+    <div class="sidebar-user">
+    <div class="user-menu" id="userMenu" style="display:none">
+      <button class="user-trigger" id="userTrigger">
+        <span class="user-avatar" id="userAvatar">?</span>
+        <span class="user-nome" id="userNome"></span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="user-pop" id="userPop">
+        <div class="pop-title">Aparência</div>
+        <button class="pop-item" id="popTrocarCor"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-palette"></use></svg> Trocar minha cor</button>
+        <div class="pop-swatches" id="popMinhaCor" style="display:none"></div>
+        <button class="pop-item" id="popCorTela"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-monitor"></use></svg> Cor da tela</button>
+        <div id="popTela" style="display:none">
+          <div class="pop-sub-title">Tema</div>
+          <div class="pop-theme-row" id="popTemaRow">
+            <button type="button" data-tema="claro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-sun"></use></svg> Claro</button>
+            <button type="button" data-tema="escuro"><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-moon"></use></svg> Escuro</button>
+          </div>
+          <div class="pop-sub-title">Cor de destaque</div>
+          <div class="pop-swatches" id="popAccent"></div>
+        </div>
+        <div class="pop-sep"></div>
+        <button class="pop-item danger" id="popSair"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-logout"></use></svg> Sair</button>
+      </div>
+    </div>
+    </div>
+
     <div class="sidebar-foot">
       <span class="pulse-dot" id="pulseDot"></span>
       <span id="lastUpdate">carregando…</span>
@@ -1594,15 +1994,15 @@ const COLUNAS = [
   {
     id:"verificacao-cadastral",
     titulo:"Verificação Cadastral",
-    sub:"Conferindo ligação produto x fornecedor.",
+    sub:"Conferindo cadastro dos produtos (portfólio, derivação e depósito).",
     cor:"#4c8dae", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-search"></use></svg>',
     acao: null,
-    descricao:"NF recém-recebida. O sistema confere a ligação de cada produto com o portfólio do fornecedor (E403FPR) e o cadastro de derivação/depósito. Normalmente é passagem rápida — a NF só fica visível aqui se travar.",
+    descricao:"NF recém-recebida. O sistema confere a ligação de cada produto com o portfólio do fornecedor (E403FPR) e o cadastro de derivação/depósito. Normalmente é passagem rápida — a NF só fica visível aqui se travar ou se ainda não tiver itens na E000IPC (espera os itens aparecerem).",
   },
   {
     id:"aguardando-ligacao",
     titulo:"Aguar. Cad/Lig. Produto x Fornecedor",
-    sub:"Produto sem ligação no portfólio deste fornecedor.",
+    sub:"Produto sem ligação no portfólio ou com cadastro incompleto.",
     cor:"#be185d", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg>',
     acao: { txt:"Fiscal: cadastrar ligação no Sapiens", cls:"aguardar" },
     descricao:"Um ou mais produtos da NF não têm ligação no portfólio deste fornecedor (ou falta derivação/vínculo de depósito). O fiscal cadastra no Sapiens; o sistema reconfere a cada 1 min e a NF segue sozinha quando resolver.",
@@ -1618,18 +2018,18 @@ const COLUNAS = [
   {
     id:"aguardando-aprovacao-oc",
     titulo:"Aguard. Aprovação de OC",
-    sub:"Sem saldo disponível, aguardando o comprador",
+    sub:"OC gerada pelo sistema, aguardando o comprador",
     cor:"#d97706", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg>',
-    acao: { txt:"Comprador (Junior): criar/aprovar OC no Sapiens", cls:"aguardar" },
-    descricao:"Algum item ficou sem saldo de OC. O sistema já gerou/consolidou a OC nova via webservice; falta o comprador (Junior) aprovar no Sapiens (SITAPR='APR'). Reconferido a cada 1 min.",
+    acao: { txt:"Comprador (Junior): aprovar a OC no Sapiens", cls:"aguardar" },
+    descricao:"Algum item ficou sem saldo de OC. O sistema gera/consolida a OC nova via webservice; falta o comprador (Junior) aprovar no Sapiens (SITAPR='APR'). Reconferido a cada 1 min. Se o webservice falhar (até 5 tentativas) ou o Sapiens recusar um cancelamento, nenhuma OC é criada — o card e o alerta dizem isso e pedem ação manual.",
   },
   {
     id:"aguardando-integracao",
     titulo:"Aguardando Integração",
-    sub:"OC com saldo disponível, NF liberada.",
+    sub:"Conferência concluída, NF liberada.",
     cor:"#16a34a", icone:'<svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg>',
     acao: { txt:"Fiscal: importar NF", cls:"importar" },
-    descricao:"Todos os itens da NF têm OC com saldo e a NF está marcada na E440NFC. Falta o fiscal importar a NF. Some da tela quando a integração real acontece (STANFV=3) ou quando a 2ª verificação acha o cabeçalho na E440NFC.",
+    descricao:"Cadastro conferido e todos os itens com OC aprovada vinculada (ou NF de devolução, que não passa por OC). Falta o fiscal importar a NF — o sistema ainda não grava nada na E440NFC. Some da tela quando a integração real acontece (STANFV=3) ou quando a 2ª verificação acha o cabeçalho na E440NFC.",
   },
 ];
 
@@ -1682,15 +2082,107 @@ const STATUS_BADGE = {
 };
 // Descrição do status pra usar como tooltip (title) no card
 const STATUS_DESCRICAO = {
-  "VERIFICACAO_CADASTRAL":   "Conferindo ligação produto x fornecedor (E403FPR)",
-  "AGUARDANDO_LIGACAO":      "Produto(s) desta NF sem ligação no portfólio deste fornecedor (E403FPR) — fiscal precisa cadastrar antes de seguir",
+  "VERIFICACAO_CADASTRAL":   "Conferindo cadastro dos produtos (portfólio E403FPR, derivação e depósito)",
+  "AGUARDANDO_LIGACAO":      "Produto(s) desta NF sem ligação no portfólio (E403FPR) ou com cadastro incompleto — fiscal precisa cadastrar antes de seguir",
   "VERIFICACAO_OC":          "Conferindo saldo de OC item a item",
-  "AGUARDANDO_APROVACAO_OC": "Sem OC com saldo disponível — aguardando o comprador (Junior) criar/aprovar a OC",
-  "AGUARDANDO_INTEGRACAO":   "OC com saldo disponível encontrada — NF liberada pra importação (E440NFC.SITNFC=2)",
+  "AGUARDANDO_APROVACAO_OC": "Sem saldo de OC suficiente — OC gerada pelo sistema, aguardando o comprador (Junior) aprovar",
+  "AGUARDANDO_INTEGRACAO":   "Cadastro e OC conferidos — NF liberada pra o fiscal importar",
 };
 
-function sbadge(status) {
-  const info = STATUS_BADGE[status];
+/* ── Diagnóstico por estágio ─────────────────────────────────
+   Fonte ÚNICA do texto de situação (banner do modal, tooltip/badge/ação do
+   card e alertas da sidebar). O estágio salvo sozinho não basta: dentro do
+   mesmo estágio há situações opostas (AGUARDANDO_APROVACAO_OC com OC gerada x
+   webservice falhou x cancelamento recusado; VERIFICACAO_OC passando x
+   travada), então o detalhe e a referência gravados pelo fluxo decidem. */
+const MAX_TENTATIVAS_WS = 5;   // = nf_processor.MAX_TENTATIVAS_WEBSERVICE
+const RE_VOC_TRAVADA = /ambígua|Falha ao cancelar|Acumulado incompleto|sem itens encontrados|decisão manual/i;
+const REF_NAO_OC = ["erros_webservice", "tentativas_webservice", "cancelamento_bloqueado"];
+function iconeSvg(nome) {
+  return `<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-${nome}"></use></svg>`;
+}
+function diagnosticoProc(status, detalhe, referencia) {
+  detalhe = detalhe || "";
+  const ref = (referencia && typeof referencia === "object" && !Array.isArray(referencia)) ? referencia : {};
+  const ocs = Object.entries(ref).filter(([k, v]) => !REF_NAO_OC.includes(k) && v).map(([, v]) => String(v));
+  const mk = (tipo, cls, icone, txt, curto, badge, acao) => ({ tipo, cls, icon: iconeSvg(icone), txt, curto, badge, acao });
+
+  switch (status) {
+    case "VERIFICACAO_CADASTRAL":
+      if (/sem itens/i.test(detalhe))
+        return mk("sem-itens", "warn", "hourglass",
+          "NF sem itens na E000IPC — o cadastro só é conferido quando os itens aparecerem (reconferido a cada 1 min)",
+          "NF sem itens na E000IPC", {cls:"neutro", label:"Aguardando itens"});
+      return mk("conferindo", "info", "search", "Conferindo cadastro dos produtos (portfólio, derivação e depósito)", "");
+
+    case "AGUARDANDO_LIGACAO": {
+      const semLig = /sem ligação no portfólio/i.test(detalhe);
+      const semCad = /cadastro incompleto/i.test(detalhe);
+      if (semCad && !semLig)
+        return mk("cadastro", "warn", "tag",
+          "Produto(s) com cadastro incompleto (sem derivação e/ou vínculo de depósito/estoque) — fiscal precisa completar no Sapiens antes de seguir",
+          "Cadastro de produto incompleto", {cls:"cadastro", label:"Cadastro incompleto"},
+          { txt:"Fiscal: completar derivação/depósito no Sapiens", cls:"aguardar" });
+      if (semCad && semLig)
+        return mk("ligacao-cadastro", "warn", "tag",
+          "Produto(s) sem ligação no portfólio deste fornecedor (E403FPR) e outros com cadastro incompleto (derivação/depósito) — fiscal precisa resolver antes de seguir",
+          "Ligação Produto x Fornecedor e cadastro pendentes", {cls:"cadastro", label:"Ligação + cadastro"});
+      return mk("ligacao", "warn", "tag",
+        "Produto(s) desta NF sem ligação no portfólio deste fornecedor (E403FPR) — fiscal precisa cadastrar antes de seguir",
+        "Ligação Produto x Fornecedor pendente", null);
+    }
+
+    case "VERIFICACAO_OC":
+      if (RE_VOC_TRAVADA.test(detalhe))
+        return mk("travada", "erro", "alert-triangle",
+          "Travada na Verificação OC — nenhuma OC foi gerada: " + detalhe,
+          "Travada na Verificação OC — requer atenção", {cls:"divergente", label:"Verificação OC — travada"},
+          { txt:"Atenção: ver detalhe do processamento (decisão manual)", cls:"aguardar" });
+      return mk("conferindo", "info", "package", "Conferindo saldo de OC item a item", "");
+
+    case "AGUARDANDO_APROVACAO_OC": {
+      if (ref.cancelamento_bloqueado)
+        return mk("bloqueio", "erro", "alert-triangle",
+          "Cancelamento de OC recusado pelo Sapiens — nenhuma OC nova foi gerada. O comprador precisa ajustar a OC no Sapiens (a NF retoma sozinha quando ela mudar)",
+          "Cancelamento de OC recusado — comprador precisa ajustar a OC", {cls:"divergente", label:"Cancelamento recusado"},
+          { txt:"Comprador: ajustar a OC no Sapiens", cls:"aguardar" });
+      if ((ref.erros_webservice || []).length && !ocs.length) {
+        const tent = Number(ref.tentativas_webservice || 0);
+        return tent >= MAX_TENTATIVAS_WS
+          ? mk("erro-ws", "erro", "alert-triangle",
+              `Erro ao gerar a OC no webservice — ${tent} tentativa(s) esgotada(s). Nenhuma OC foi criada: requer ação manual (criar a OC no Sapiens ou corrigir o webservice)`,
+              "Erro ao gerar OC — tentativas esgotadas, requer ação manual", {cls:"divergente", label:"Erro ao gerar OC"},
+              { txt:"Ação manual: criar a OC no Sapiens / corrigir o webservice", cls:"aguardar" })
+          : mk("erro-ws", "warn", "alert-triangle",
+              `Erro ao gerar a OC no webservice (tentativa ${tent}/${MAX_TENTATIVAS_WS}) — nenhuma OC foi criada ainda; o sistema tenta de novo sozinho`,
+              "Erro ao gerar OC — nova tentativa automática", {cls:"divergente", label:"Erro ao gerar OC"},
+              { txt:"Sistema vai tentar gerar a OC de novo", cls:"aguardar" });
+      }
+      if (ocs.length)
+        return mk("aprovando", "warn", "clipboard-list",
+          `OC gerada pelo sistema (${ocs.map(n => "OC " + n).join(", ")}) — aguardando o comprador (Junior) aprovar no Sapiens`,
+          "Aguardando aprovação de OC", null);
+      return mk("gerando", "warn", "clipboard-list",
+        "Sem OC com saldo disponível — o sistema está gerando/consolidando a OC; depois o comprador (Junior) aprova no Sapiens",
+        "Aguardando geração/aprovação de OC", null);
+    }
+
+    case "AGUARDANDO_INTEGRACAO":
+      if (/devolução/i.test(detalhe)) {
+        const d = mk("devolucao", "ok", "check-circle",
+          "NF de devolução — integração direta, sem conferência de portfólio/OC. Liberada para o fiscal importar",
+          "", {cls:"ok", label:"Devolução — Aguard. Integração"});
+        d.devolucao = true;
+        return d;
+      }
+      return mk("liberada", "ok", "check-circle",
+        "Cadastro conferido e OC aprovada vinculada a todos os itens — NF liberada para o fiscal importar", "", null);
+  }
+  return null;
+}
+
+function sbadge(status, override) {
+  const info = override || STATUS_BADGE[status];
   if (!info) return "";
   return `<span class="sbadge ${info.cls}">${info.label}</span>`;
 }
@@ -1782,6 +2274,7 @@ function renderCol(id, lista, cor, colDef) {
   const assinatura = JSON.stringify(lista.map(nf => [
     nf.numnfc, nf.nomfor, nf.vlrfin, nf.qtdite, nf.codemp, nf.codfil,
     nf.datemi, nf._proc && nf._proc.status_interno, nf._proc && nf._proc.detalhe,
+    nf._proc && JSON.stringify(nf._proc.referencia || null),
     nf._atrib && nf._atrib.codusu,
   ]));
   if (_ultimoRenderCol[id] === assinatura) return;  // nada mudou → não repinta
@@ -1800,8 +2293,9 @@ function renderCol(id, lista, cor, colDef) {
     const tClass  = classTempo(nf.datemi);
     const valor   = fmtValor(nf.vlrfin);
     const itens   = nf.qtdite ?? "";
-    const bdg      = proc ? sbadge(proc.status_interno) : "";
-    const bdgTitle = proc ? (STATUS_DESCRICAO[proc.status_interno] || "") : "";
+    const diag     = proc ? diagnosticoProc(proc.status_interno, proc.detalhe, proc.referencia) : null;
+    const bdg      = proc ? sbadge(proc.status_interno, diag && diag.badge) : "";
+    const bdgTitle = proc ? ((diag && diag.cls !== "info" && diag.txt) || STATUS_DESCRICAO[proc.status_interno] || "") : "";
     const datemi  = fmt(nf.datemi);
 
     // Card atribuído (só existe na coluna Aguardando Integração) fica com a
@@ -1814,8 +2308,9 @@ function renderCol(id, lista, cor, colDef) {
           ? `<div class="nf-atribuicao-chip sem-atribuicao"><svg class="icon-inline" width="11" height="11" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> NF sem usuário atribuído</div>`
           : "");
 
-    const acaoBanner = colDef?.acao
-      ? `<div class="nf-acao ${colDef.acao.cls}">→ ${esc(colDef.acao.txt)}</div>`
+    const acaoCard = (diag && diag.acao) || colDef?.acao;
+    const acaoBanner = acaoCard
+      ? `<div class="nf-acao ${acaoCard.cls}">→ ${esc(acaoCard.txt)}</div>`
       : "";
 
     return `
@@ -1936,7 +2431,7 @@ async function abrirModal(ds) {
 
     let logAcoes = [];
     try {
-      const rLog = await fetch(`/api/oc/log/${encodeURIComponent(ds.numnfc||"")}`);
+      const rLog = await fetch(`/api/oc/log/${encodeURIComponent(ds.chvnel||"")}`);
       if (rLog.ok) logAcoes = await rLog.json();
     } catch { /* histórico é opcional — modal segue sem ele */ }
 
@@ -1954,24 +2449,24 @@ async function abrirModal(ds) {
 
     const ocs        = d.ocs_abertas || [];
     const itens      = d.itens_nf   || [];
-    const cobertos   = itens.filter(i => i.coberto).length;
-    const divItens   = itens.length - cobertos;
+    const procStatus  = ds.procStatus || "";
     const procDetalhe = ds.procDetalhe || "";
     let procReferencia = {};
     try { procReferencia = JSON.parse(ds.procReferencia || "{}"); } catch {}
+    // Mesmo diagnóstico do card/alertas — banner e contadores não podem
+    // discordar do que o fluxo realmente gravou.
+    const diag          = diagnosticoProc(procStatus, procDetalhe, procReferencia);
+    const ehDevolucao   = !!(diag && diag.devolucao);   // devolução não passa por OC
+    const cobertos      = itens.filter(i => i.coberto).length;
+    const aguardAprov   = itens.filter(i => i.coberto && i.aguardando_aprovacao).length;
+    const okPuro        = cobertos - aguardAprov;
+    const divItens      = ehDevolucao ? 0 : itens.length - cobertos;
+    const cadastroInc   = d.cadastro_incompleto || [];
 
     let html = "";
 
     // ── Banner de situação atual ──────────────────────────────
-    const procStatus = ds.procStatus || "";
-    const SITUACAO_MAP = {
-      "VERIFICACAO_CADASTRAL":   { cls:"info", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-search"></use></svg>', txt:"Conferindo ligação produto x fornecedor (E403FPR)" },
-      "AGUARDANDO_LIGACAO":      { cls:"warn", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg>', txt:"Produto(s) desta NF sem ligação no portfólio deste fornecedor (E403FPR) — fiscal precisa cadastrar antes de seguir" },
-      "VERIFICACAO_OC":          { cls:"info", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-package"></use></svg>', txt:"Conferindo saldo de OC item a item" },
-      "AGUARDANDO_APROVACAO_OC": { cls:"warn", icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg>', txt:"Sem OC com saldo disponível para este fornecedor/produto — aguardando o comprador (Junior) criar/aprovar a OC" },
-      "AGUARDANDO_INTEGRACAO":   { cls:"ok",   icon:'<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-check-circle"></use></svg>', txt:"OC com saldo disponível — NF liberada para importação" },
-    };
-    const sit = SITUACAO_MAP[procStatus];
+    const sit = diag;
     if (sit) {
       html += `
         <div class="modal-situacao ${sit.cls}">
@@ -2014,15 +2509,22 @@ async function abrirModal(ds) {
     // Status salvo (banner acima) é só o que o fluxo gravou na última rodada;
     // a lista de itens vem da conferência ao vivo. Se os dois discordam, avisa
     // em vez de deixar "liberada" (verde) e itens divergentes (vermelho) juntos.
-    if (procStatus === "AGUARDANDO_INTEGRACAO" && d.confirmado && !d.itens_ok) {
-      html += `<div class="modal-situacao warn"><span class="modal-situacao-icon"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg></span><span>Atenção: o status salvo diz "liberada", mas a conferência ao vivo encontrou ${divItens} item(ns) divergente(s) — veja os itens abaixo antes de importar.</span></div>`;
+    const avisoDiscordancia = (txt) => `<div class="modal-situacao warn"><span class="modal-situacao-icon">${iconeSvg("alert-triangle")}</span><span>${txt}</span></div>`;
+    if (procStatus === "AGUARDANDO_INTEGRACAO" && !ehDevolucao && d.confirmado) {
+      if (divItens > 0)
+        html += avisoDiscordancia(`Atenção: o status salvo diz "liberada", mas a conferência ao vivo encontrou ${divItens} item(ns) divergente(s) — veja os itens abaixo antes de importar.`);
+      else if (aguardAprov > 0)
+        html += avisoDiscordancia(`Atenção: o status salvo diz "liberada", mas ${aguardAprov} item(ns) está(ão) ligado(s) a OC ainda em análise no Sapiens — confirme a aprovação antes de importar.`);
+    }
+    if (diag && diag.tipo === "aprovando" && d.confirmado && divItens === 0 && aguardAprov === 0) {
+      html += `<div class="modal-situacao info"><span class="modal-situacao-icon">${iconeSvg("check-circle")}</span><span>A conferência ao vivo já vê a(s) OC(s) aprovada(s) no Sapiens — a NF avança na próxima rodada do sistema (1 min).</span></div>`;
     }
 
         // Números de OC pendentes de aprovação (Junior) — evita caçar no
     // histórico/log; copia direto daqui.
     if (procStatus === "AGUARDANDO_APROVACAO_OC") {
       const ocsPendentes = Object.entries(procReferencia)
-        .filter(([chave, val]) => chave !== "erros_webservice" && chave !== "cancelamento_bloqueado" && val)
+        .filter(([chave, val]) => !["erros_webservice", "tentativas_webservice", "cancelamento_bloqueado"].includes(chave) && val)
         .map(([chave, numocp]) => {
           const label = chave === "apr" ? "OC consolidada (Juntar_OC)"
                       : chave === "pen" ? "OC nova (OC_Pendente)"
@@ -2057,15 +2559,37 @@ async function abrirModal(ds) {
         </div>`;
     }
 
+    // Cadastro incompleto (derivação/depósito) — mesma pendência que segura a
+    // NF em AGUARDANDO_LIGACAO; antes só o portfólio aparecia no modal.
+    if (cadastroInc.length > 0) {
+      html += `
+        <div class="modal-section" style="background:#fdf2f8">
+          <div class="modal-section-title" style="color:#be185d;display:flex;align-items:center;gap:5px"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> Cadastro incompleto — derivação/depósito (${cadastroInc.length})</div>
+          ${cadastroInc.map(it => {
+            const faltas = [it.sem_derivacao ? "derivação" : "", it.sem_deposito ? "vínculo de depósito/estoque" : ""].filter(Boolean).join(" e ");
+            return `
+            <div style="font-size:0.72rem;color:#831843;padding:2px 0">
+              ${esc(it.despro || it.profor || "—")} <span style="color:var(--text-faint);font-family:var(--mono);font-size:0.65rem">(${esc(it.profor||"")})</span> — sem ${esc(faltas || "cadastro")}
+            </div>`;
+          }).join("")}
+        </div>`;
+    }
+
     // ── Contadores de resumo ──────────────────────────────────
-    if (itens.length > 0) {
+    const blocoDetalhe = procDetalhe ? `<div style="flex:1;min-width:140px;font-size:0.68rem;color:var(--text-faint);padding:4px 0"><strong style="color:var(--text-dim)">Último processamento:</strong><br>${esc(procDetalhe)}</div>` : "";
+    if (itens.length > 0 && !ehDevolucao) {
       html += `
         <div class="modal-resumo">
-          <div class="resumo-stat ok"><span class="rs-val">${cobertos}</span><span class="rs-lbl">Itens OK</span></div>
+          <div class="resumo-stat ok"><span class="rs-val">${okPuro}</span><span class="rs-lbl">Itens OK</span></div>
+          ${aguardAprov > 0 ? `<div class="resumo-stat apr"><span class="rs-val">${aguardAprov}</span><span class="rs-lbl">Aguard. aprovação</span></div>` : ""}
           <div class="resumo-stat div"><span class="rs-val">${divItens}</span><span class="rs-lbl">Divergentes</span></div>
-          <div class="resumo-stat neu"><span class="rs-val">${ocs.length}</span><span class="rs-lbl">OCs Abertas</span></div>
-          ${procDetalhe ? `<div style="flex:1;min-width:140px;font-size:0.68rem;color:var(--text-faint);padding:4px 0"><strong style="color:var(--text-dim)">Último processamento:</strong><br>${esc(procDetalhe)}</div>` : ""}
+          <div class="resumo-stat neu"><span class="rs-val">${ocs.length}</span><span class="rs-lbl">OCs desta NF</span></div>
+          ${blocoDetalhe}
         </div>`;
+    } else if (blocoDetalhe) {
+      // Sem itens (NF sem linhas na E000IPC) ou devolução: não há contadores
+      // de cobertura, mas o motivo gravado pelo fluxo precisa aparecer.
+      html += `<div class="modal-resumo">${blocoDetalhe}</div>`;
     }
 
     // ── Informações da NF ─────────────────────────────────────
@@ -2088,14 +2612,16 @@ async function abrirModal(ds) {
     if (itens.length > 0) {
       html += `
         <div class="modal-section">
-          <div class="modal-section-title">Itens da NF × Cobertura nas OCs (${itens.length} item${itens.length!==1?"s":""} — ${cobertos} OK · ${divItens} divergente${divItens!==1?"s":""})</div>
+          <div class="modal-section-title">${ehDevolucao
+            ? `Itens da NF (${itens.length} item${itens.length!==1?"s":""} — devolução: não passa por OC)`
+            : `Itens da NF × Cobertura nas OCs (${itens.length} item${itens.length!==1?"s":""} — ${okPuro} OK${aguardAprov ? ` · ${aguardAprov} aguardando aprovação` : ""} · ${divItens} divergente${divItens!==1?"s":""})`}</div>
           <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:4px;padding:0 11px 6px;font-size:0.6rem;color:var(--text-faint);font-weight:600">
             <span>Produto</span><span style="text-align:right">Qtd NF</span><span style="text-align:right">Qtd na OC</span><span></span>
           </div>
           ${itens.map(it => {
             const falta = !it.coberto ? (Number(it.qtdinf||0) - Number(it.qtd_oc_disponivel||0)) : 0;
             return `
-              <div class="item-row ${it.coberto?'':'divergente'}">
+              <div class="item-row ${(it.coberto || ehDevolucao)?'':'divergente'}">
                 <div>
                   <div class="item-prod">${esc(it.despro || it.cplipc || it.profor || "—")}</div>
                   <!-- NOVO: seqipc — agora que a conferência é item a item, ajuda identificar qual linha da NF é essa -->
@@ -2103,8 +2629,13 @@ async function abrirModal(ds) {
                   ${it.consolidada
                     ? `<div class="item-alerta consolidada"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-shuffle"></use></svg> Consolidação — ${esc(String(it.num_ocs))} OCs somam ${Number(it.qtd_oc_disponivel||0).toLocaleString("pt-BR")} un.</div>`
                     : ""}
-                  ${!it.coberto
-                    ? (it.fora_portfolio
+                  ${it.coberto && it.aguardando_aprovacao && !ehDevolucao
+                    ? `<div class="item-alerta insuf"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg> OC vinculada ainda em análise — aguardando aprovação do comprador</div>`
+                    : ""}
+                  ${(!it.coberto && !ehDevolucao)
+                    ? (it.cadastro_incompleto
+                        ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> ${esc(it.divergencia)}</div>`
+                        : it.fora_portfolio
                         ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-tag"></use></svg> Fora do portfólio do fornecedor</div>`
                         : (it.divergencia && it.divergencia.startsWith("OC ")
                             ? `<div class="item-alerta sem-oc"><svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24"><use href="#icon-alert-triangle"></use></svg> ${esc(it.divergencia)}</div>`
@@ -2115,14 +2646,18 @@ async function abrirModal(ds) {
                   <!-- Mostra TODAS as OC(s) que compõem a cobertura, com o saldo
                        disponível de cada (o modal agora soma várias OCs). -->
                   ${(it.ocs_cobertura || []).length > 0
-                    ? `<div style="font-size:0.6rem;color:var(--text-faint);margin-top:2px">
+                    ? `<div class="item-ocs">
                         ${it.ocs_cobertura.map(o => `OC ${esc(String(o.numocp))}${o.disponivel!=null?` (${Number(o.disponivel).toLocaleString("pt-BR")} un.)`:""}`).join(" · ")}
                       </div>`
                     : ""}
                 </div>
                 <div class="item-qtd">${Number(it.qtdinf ?? 0).toLocaleString("pt-BR")}</div>
-                <div class="item-oc ${it.coberto?'ok':'nok'}">${Number(it.qtd_oc_disponivel ?? 0).toLocaleString("pt-BR")}</div>
-                <span class="sbadge ${it.coberto?'ok':'divergente'}">${it.coberto?"OK":"DIV"}</span>
+                <div class="item-oc ${ehDevolucao ? '' : (it.coberto?'ok':'nok')}">${ehDevolucao ? "—" : Number(it.qtd_oc_disponivel ?? 0).toLocaleString("pt-BR")}</div>
+                ${ehDevolucao
+                  ? `<span class="sbadge neutro">N/A</span>`
+                  : (it.coberto && it.aguardando_aprovacao)
+                    ? `<span class="sbadge aprovacao">APROV.</span>`
+                    : `<span class="sbadge ${it.coberto?'ok':'divergente'}">${it.coberto?"OK":"DIV"}</span>`}
               </div>`;
           }).join("")}
         </div>`;
@@ -2131,9 +2666,13 @@ async function abrirModal(ds) {
     // ── OCs abertas do fornecedor ─────────────────────────────
     html += `
       <div class="modal-section">
-        <div class="modal-section-title">OCs Abertas do Fornecedor (${ocs.length})</div>
+        <div class="modal-section-title">OCs do Fornecedor ligadas a esta NF (${ocs.length})</div>
         ${ocs.length === 0
-          ? `<div style="font-size:0.74rem;color:#dc2626;padding:4px 0">Nenhuma OC aberta cadastrada para este fornecedor</div>`
+          ? ((foraPortfolio.length > 0 || cadastroInc.length > 0)
+              ? `<div style="font-size:0.74rem;color:var(--text-faint);padding:4px 0">OCs não consultadas: a busca de OC só roda para produtos com cadastro completo (há item fora do portfólio ou com cadastro incompleto). Isso não significa que o fornecedor não tenha OC.</div>`
+              : ehDevolucao
+                ? `<div style="font-size:0.74rem;color:var(--text-faint);padding:4px 0">NF de devolução — não usa OC.</div>`
+                : `<div style="font-size:0.74rem;color:#dc2626;padding:4px 0">Nenhuma OC aberta com saldo para os produtos desta NF</div>`)
           : ocs.map(oc => {
               const sitocpInfo = SITOCP_INFO[oc.sitocp] || {cls:"neutro",label:"Sit. "+oc.sitocp};
               const sitaprInfo = SITAPR_INFO[oc.sitapr] || {cls:"neutro",label:oc.sitapr||"—"};
@@ -2160,19 +2699,19 @@ async function abrirModal(ds) {
                       <span style="text-align:right">Unid.</span>
                     </div>
                     ${itensOc.length === 0
-                      ? `<div style="font-size:0.7rem;color:var(--text-faint);padding:4px">Sem itens</div>`
+                      ? `<div class="oc-vazio">Sem itens</div>`
                       : itensOc.map(it => {
                           const saldo = Number(it.qtdabe||0);
                           return `
                             <div class="oc-item-row">
                               <div>
-                                <div style="color:var(--text);word-break:break-word">${esc(it.cplipo || it.profor || "—")}</div>
-                                <div style="font-size:0.6rem;color:var(--text-faint)">${esc(it.codpro || it.profor || "")}</div>
+                                <div class="oc-prod">${esc(it.cplipo || it.profor || "—")}</div>
+                                <div class="oc-cod">${esc(it.codpro || it.profor || "")}</div>
                               </div>
-                              <div style="text-align:right;color:var(--text-dim)">${Number(it.qtdori||0).toLocaleString("pt-BR")}</div>
-                              <div style="text-align:right;color:var(--text-dim)">${Number(it.qtdrec||0).toLocaleString("pt-BR")}</div>
-                              <div style="text-align:right;font-weight:600;color:${saldo>0?'#7c6fcf':'var(--text-faint)'}">${saldo.toLocaleString("pt-BR")}</div>
-                              <div style="text-align:right;color:var(--text-faint)">${esc(it.unimed||"")}</div>
+                              <div class="oc-n">${Number(it.qtdori||0).toLocaleString("pt-BR")}</div>
+                              <div class="oc-n">${Number(it.qtdrec||0).toLocaleString("pt-BR")}</div>
+                              <div class="oc-n oc-saldo${saldo>0?'':' zero'}">${saldo.toLocaleString("pt-BR")}</div>
+                              <div class="oc-n un">${esc(it.unimed||"")}</div>
                             </div>`;
                         }).join("")
                     }
@@ -2204,19 +2743,19 @@ async function abrirModal(ds) {
             Histórico de ações (${logAcoes.length})
             <span class="chev" style="margin-left:auto;transition:transform .15s">▾</span>
           </div>
-          <div style="max-height:260px;overflow-y:auto">
+          <div class="log-lista">
             ${logAcoes.map(l => {
               const info = ETAPA_INFO[l.etapa] || { icon:"•", cor:"var(--text-faint)" };
               return `
-                <div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border,#eee);font-size:0.7rem">
-                  <span style="flex-shrink:0">${info.icon}</span>
-                  <div style="flex:1;min-width:0">
-                    <div style="color:${info.cor};font-weight:600">
-                      ${esc(l.acao)}${l.seqipc ? ` <span style="font-weight:400;color:var(--text-faint)">(item ${esc(l.seqipc)})</span>` : ""}
+                <div class="log-row">
+                  <span class="log-ico" style="color:${info.cor}">${info.icon}</span>
+                  <div class="log-corpo">
+                    <div class="log-acao" style="color:${info.cor}">
+                      ${esc(l.acao)}${l.seqipc ? ` <span class="log-seq">(item ${esc(l.seqipc)})</span>` : ""}
                     </div>
-                    ${l.detalhe ? `<div style="color:var(--text-dim);word-break:break-word">${esc(l.detalhe)}</div>` : ""}
+                    ${l.detalhe ? `<div class="log-det">${esc(l.detalhe)}</div>` : ""}
                   </div>
-                  <span style="flex-shrink:0;color:var(--text-faint);font-size:0.63rem;white-space:nowrap">${esc(fmtLogHora(l.criado_em))}</span>
+                  <span class="log-hora">${esc(fmtLogHora(l.criado_em))}</span>
                 </div>`;
             }).join("")}
           </div>
@@ -2264,13 +2803,20 @@ function filtrarPorUsuario(lista) {
 }
 
 /* ── Alertas ─────────────────────────────────────────────── */
-function renderAlertas(aguardandoLigacao, aguardandoAprovacaoOc) {
+function renderAlertas(aguardandoLigacao, aguardandoAprovacaoOc, verificacaoOc = []) {
   const el  = document.getElementById("alertsItems");
   const cnt = document.getElementById("alertsCount");
 
+  const dg = p => p._proc ? diagnosticoProc(p._proc.status_interno, p._proc.detalhe, p._proc.referencia) : null;
   const itens = [
-    ...aguardandoLigacao.map(p => ({cls:"warn", txt:`NF ${p.numnfc} — Ligação Produto x Fornecedor pendente`, sub:p.nomfor ?? ""})),
-    ...aguardandoAprovacaoOc.map(p => ({cls:"warn", txt:`NF ${p.numnfc} — Aguardando aprovação de OC`, sub:p.nomfor ?? ""})),
+    ...aguardandoLigacao.map(p => ({cls:"warn", txt:`NF ${p.numnfc} — ${(dg(p) && dg(p).curto) || "Ligação Produto x Fornecedor pendente"}`, sub:p.nomfor ?? ""})),
+    ...aguardandoAprovacaoOc.map(p => {
+      const d = dg(p);
+      return {cls: d && d.cls === "erro" ? "erro" : "warn", txt:`NF ${p.numnfc} — ${(d && d.curto) || "Aguardando aprovação de OC"}`, sub:p.nomfor ?? ""};
+    }),
+    // Só as NFs travadas na Verificação OC (as que passam rápido não são alerta).
+    ...verificacaoOc.filter(p => { const d = dg(p); return d && d.cls === "erro"; })
+      .map(p => ({cls:"erro", txt:`NF ${p.numnfc} — ${dg(p).curto}`, sub:p.nomfor ?? ""})),
   ];
 
   cnt.textContent = itens.length;
@@ -2308,7 +2854,7 @@ async function atualizarColunasLocais() {
     ]);
     ATRIBUICOES = atribuicoes;
     const procMap = {};
-    for (const p of procList) procMap[String(p.numnfc)] = p;
+    for (const p of procList) procMap[String(p.chvnel)] = p;
 
     const aguardandoLigacao     = [];
     const verificacaoOc         = [];
@@ -2351,6 +2897,7 @@ async function atualizarColunasLocais() {
     renderAlertas(
       (!permitidas || permitidas.includes("aguardando-ligacao"))      ? aguardandoLigacaoVis     : [],
       (!permitidas || permitidas.includes("aguardando-aprovacao-oc")) ? aguardandoAprovacaoOcVis : [],
+      (!permitidas || permitidas.includes("verificacao-oc"))          ? verificacaoOcVis         : [],
     );
 
     _procMapAtual = procMap;
@@ -2384,7 +2931,7 @@ async function atualizarColunaNovas() {
     if (data.erro) throw new Error(data.erro);
 
     const procMap = {};
-    for (const p of procList) procMap[String(p.numnfc)] = p;
+    for (const p of procList) procMap[String(p.chvnel)] = p;
     const vcLocal = procList
       .filter(p => p.status_interno === "VERIFICACAO_CADASTRAL")
       .map(p => ({
@@ -2393,7 +2940,7 @@ async function atualizarColunaNovas() {
         datemi:p.datemi, vlrfin:p.vlrfin, qtdite:p.qtdite, _proc:p,
       }));
     // Só entra na coluna 1 quem NÃO tem registro local em NENHUM estágio.
-    const novas = (data.nfs || []).filter(nf => !procMap[String(nf.numnfc)]);
+    const novas = (data.nfs || []).filter(nf => !procMap[String(nf.chvnel)]);
     renderCol("verificacao-cadastral", filtrarPorUsuario(novas.concat(vcLocal)), "#4c8dae", colunaById("verificacao-cadastral"));
   } catch(err) {
     console.error("dashboard (Oracle, coluna 1) falhou/lento:", err);
@@ -2658,6 +3205,8 @@ function irParaPassoCodusu() {
   document.getElementById("loginPassoSenha").style.display  = "none";
   document.getElementById("loginPassoCriar").style.display  = "none";
   document.getElementById("loginSteps").innerHTML = '<i class="on"></i><i></i>';
+  document.getElementById("loginTitle").textContent = "Entrar";
+  document.getElementById("loginSub").textContent = "Informe seu código de usuário pra continuar.";
   loginErro("");
 }
 
@@ -2672,6 +3221,10 @@ document.getElementById("loginBtnIdentificar").addEventListener("click", async (
     const d = await r.json();
     if (!r.ok) { loginErro(d.erro || "Erro."); return; }
     document.getElementById("loginPassoCodusu").style.display = "none";
+    if (d.existe && d.nomusu) {
+      document.getElementById("loginTitle").textContent = `Bem vinda(o), ${d.nomusu}`;
+      document.getElementById("loginSub").textContent = d.precisa_criar_senha ? "Crie sua senha para continuar." : "Digite sua senha para continuar.";
+    }
     if (d.existe && !d.precisa_criar_senha) {
       document.getElementById("loginPassoSenha").style.display = "";
       document.getElementById("loginSenha").value = "";
@@ -3078,35 +3631,111 @@ document.getElementById("navCrm").addEventListener("click", () => {
 
 /* ── Relatório de OC: popup de período ────────────────────── */
 const relOcOverlay = document.getElementById("relOcOverlay");
+const relDe   = document.getElementById("relOcDe");
+const relAte  = document.getElementById("relOcAte");
+const relBtn  = document.getElementById("relOcGerar");
+const relMsgEl = document.getElementById("relMsg");
+let relOcocupado = false;
+let relFecharTimer = null;
+
+const relIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const relBr  = (iso) => iso.split("-").reverse().join("/");
+const relSomaDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+function relIntervalo(chave) {
+  const hoje = new Date();
+  if (chave === "hoje")  return [relIso(hoje), relIso(hoje)];
+  if (chave === "ontem") { const o = relSomaDias(hoje, -1); return [relIso(o), relIso(o)]; }
+  if (chave === "7")     return [relIso(relSomaDias(hoje, -6)),  relIso(hoje)];
+  if (chave === "30")    return [relIso(relSomaDias(hoje, -29)), relIso(hoje)];
+  if (chave === "mes")   return [relIso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), relIso(hoje)];
+  return null;
+}
+
+/* Mensagem de estado dentro do popup (no lugar dos alert()). */
+function relMsg(tipo, texto) {
+  if (!texto) { relMsgEl.style.display = "none"; relMsgEl.innerHTML = ""; return; }
+  const ICONES = { ok: "#icon-check-circle", erro: "#icon-alert-triangle", warn: "#icon-alert-triangle" };
+  relMsgEl.className = "rel-msg " + tipo;
+  relMsgEl.style.display = "flex";
+  relMsgEl.innerHTML = tipo === "load"
+    ? `<div class="m-row"><span>${texto}</span></div><div class="rel-prog"><i></i></div>`
+    : `<svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="${ICONES[tipo] || "#icon-info"}"></use></svg><span>${texto}</span>`;
+}
+
+/* Resumo do período + validação + destaque do atalho que bate com as datas. */
+function relAtualizar() {
+  const de = relDe.value, ate = relAte.value;
+  document.querySelectorAll("#relChips button").forEach(b => {
+    const r = relIntervalo(b.dataset.r);
+    b.classList.toggle("on", !!r && r[0] === de && r[1] === ate);
+  });
+  const sum = document.getElementById("relSum");
+  if (!de || !ate) {
+    sum.textContent = "";
+    relBtn.disabled = true;
+    relMsg("warn", "Escolha as duas datas para gerar o relatório.");
+    return;
+  }
+  if (de > ate) {
+    sum.textContent = "";
+    relBtn.disabled = true;
+    relMsg("erro", "A data inicial não pode ser maior que a final.");
+    return;
+  }
+  const dias = Math.round((new Date(ate) - new Date(de)) / 86400000) + 1;
+  sum.innerHTML = `${relBr(de)} <span style="opacity:.5">→</span> ${relBr(ate)} <span class="pill">${dias} dia${dias !== 1 ? "s" : ""}</span>`;
+  relBtn.disabled = relOcocupado;
+  relMsg(dias > 90 ? "warn" : "", dias > 90 ? `Período longo (${dias} dias): a geração pode demorar um pouco mais.` : "");
+}
 
 function abrirRelOc() {
-  const hoje = new Date().toISOString().slice(0, 10);
-  document.getElementById("relOcDe").value  = hoje;
-  document.getElementById("relOcAte").value = hoje;
+  clearTimeout(relFecharTimer);
+  const [de, ate] = relIntervalo("hoje");
+  relDe.value = de;
+  relAte.value = ate;
+  relAtualizar();
   relOcOverlay.classList.add("open");
 }
-function fecharRelOc() { relOcOverlay.classList.remove("open"); }
+function fecharRelOc() { clearTimeout(relFecharTimer); relOcOverlay.classList.remove("open"); }
 
 document.getElementById("navRelatorioOc").addEventListener("click", abrirRelOc);
 document.getElementById("relOcClose").addEventListener("click", fecharRelOc);
+document.getElementById("relOcCancelar").addEventListener("click", fecharRelOc);
 relOcOverlay.addEventListener("click", (e) => { if (e.target === relOcOverlay) fecharRelOc(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && relOcOverlay.classList.contains("open") && !relOcocupado) fecharRelOc();
+});
+document.getElementById("relChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-r]");
+  if (!b || relOcocupado) return;
+  const [de, ate] = relIntervalo(b.dataset.r);
+  relDe.value = de;
+  relAte.value = ate;
+  relAtualizar();
+});
+relDe.addEventListener("input", relAtualizar);
+relAte.addEventListener("input", relAtualizar);
 
-document.getElementById("relOcGerar").addEventListener("click", async () => {
-  const de  = document.getElementById("relOcDe").value;
-  const ate = document.getElementById("relOcAte").value;
-  if (!de || !ate) { alert("Escolha as duas datas."); return; }
-  if (de > ate)    { alert("A data inicial não pode ser maior que a final."); return; }
+relBtn.addEventListener("click", async () => {
+  const de  = relDe.value;
+  const ate = relAte.value;
+  if (!de || !ate) { relMsg("warn", "Escolha as duas datas."); return; }
+  if (de > ate)    { relMsg("erro", "A data inicial não pode ser maior que a final."); return; }
 
-  const btn = document.getElementById("relOcGerar");
-  const txt = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Gerando…";
+  const txtEl = document.getElementById("relOcGerarTxt");
+  const txt = txtEl.textContent;
+  relOcocupado = true;
+  relBtn.disabled = true;
+  relBtn.classList.add("busy");
+  txtEl.textContent = "Gerando…";
+  [relDe, relAte].forEach(i => i.disabled = true);
+  relMsg("load", `Gerando o relatório de <b>${relBr(de)}</b> a <b>${relBr(ate)}</b>… isso pode levar alguns segundos.`);
   try {
     const r = await fetch(`/api/oc/relatorio-aprovadas?de=${de}&ate=${ate}`);
     if (!r.ok) {
       let msg = r.status;
       try { msg = (await r.json()).erro || msg; } catch {}
-      alert("Não foi possível gerar o relatório: " + msg);
+      relMsg("erro", "Não foi possível gerar o relatório: " + msg);
       return;
     }
     const blob = await r.blob();
@@ -3119,12 +3748,16 @@ document.getElementById("relOcGerar").addEventListener("click", async () => {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    fecharRelOc();
+    relMsg("ok", "Relatório gerado com sucesso! O download do arquivo Excel foi iniciado.");
+    relFecharTimer = setTimeout(fecharRelOc, 2200);
   } catch (e) {
-    alert("Falha ao baixar o relatório: " + e);
+    relMsg("erro", "Falha ao baixar o relatório: " + e);
   } finally {
-    btn.disabled = false;
-    btn.textContent = txt;
+    relOcocupado = false;
+    relBtn.classList.remove("busy");
+    txtEl.textContent = txt;
+    [relDe, relAte].forEach(i => i.disabled = false);
+    relBtn.disabled = !(relDe.value && relAte.value && relDe.value <= relAte.value);
   }
 });
 

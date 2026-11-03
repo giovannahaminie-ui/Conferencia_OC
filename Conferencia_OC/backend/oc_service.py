@@ -145,6 +145,11 @@ def conferir_nf_vs_portfolio(
 ) -> dict:
 
     fora_portfolio = verificar_portfolio_fornecedor(codemp, codfil, codfor, chvnel)
+    # Mesma pendência que o fluxo automático checa (verificar_derivacao_deposito)
+    # — sem isso o modal mostrava a NF "ok" enquanto o fluxo a segurava em
+    # AGUARDANDO_LIGACAO por derivação/depósito.
+    cadastro_incompleto = verificar_derivacao_deposito(codemp, codfor, chvnel)
+    profors_sem_cadastro = {str(it["profor"] or "") for it in cadastro_incompleto}
     # usado abaixo pra marcar, item a item, se a causa da divergência é
     # "fora do portfólio" (nem cadastrado) ou "sem OC" (cadastrado mas sem OC cobrindo).
     profors_fora_portfolio = {str(it["profor"] or "") for it in fora_portfolio}
@@ -160,6 +165,7 @@ def conferir_nf_vs_portfolio(
     # paralelo ao numocps_relevantes, nos mesmos dois pontos.
     seqipos_relevantes: dict[str, set] = {}
     total_cobertos = 0
+    itens_aguardando_aprovacao = 0   # cobertos por OC ainda não aprovada (SITAPR != 'APR')
     ocs_da_nf = None          # carregada sob demanda (ver abaixo)
     linhas_usadas = set()
     for seqipc in seqipcs:
@@ -196,6 +202,30 @@ def conferir_nf_vs_portfolio(
             })
             continue
 
+        if profor in profors_sem_cadastro:
+            # Tem ligação no portfólio, mas falta derivação e/ou depósito —
+            # o fluxo para aqui (AGUARDANDO_LIGACAO) e não busca OC; o modal
+            # segue a mesma regra em vez de mostrar cobertura.
+            faltas = next((it for it in cadastro_incompleto if str(it["profor"] or "") == profor), {})
+            motivo = " e ".join(f for cond, f in (
+                (faltas.get("sem_derivacao"), "derivação"),
+                (faltas.get("sem_deposito"), "vínculo de depósito/estoque"),
+            ) if cond) or "cadastro"
+            itens_resultado.append({
+                "seqipc":            item["seqipc"],
+                "codpro":            item["codpro"],
+                "profor":            item["profor"],
+                "despro":            item["cplipc"],
+                "qtdinf":            qtd_nf,
+                "qtd_oc_disponivel": 0,
+                "coberto":           False,
+                "fora_portfolio":    False,
+                "cadastro_incompleto": True,
+                "ocs_cobertura":     [],
+                "divergencia":       f"Cadastro incompleto do produto: sem {motivo}",
+            })
+            continue
+
         # Resolvido cedo (antes da checagem de vínculo) porque também é
         # usado pra validar que o vínculo existente é do produto certo.
         codpro_ws = str(item["codpro"] or "").strip() or codpro_do_portfolio(codemp, codfor, item["profor"])
@@ -214,7 +244,7 @@ def conferir_nf_vs_portfolio(
             # como divergência (e não como "coberto" com a qtd da NF ecoada),
             # mas ainda lista a OC no bloco de baixo pra ficar visível o que
             # aconteceu.
-            sitocp_vinc = oc_situacao(codemp, codfil, item["numocp"])[0]
+            sitocp_vinc, sitapr_vinc = oc_situacao(codemp, codfil, item["numocp"])
             if sitocp_vinc in ("4", "5"):
                 numocps_relevantes.add(str(item["numocp"]))
                 if item["seqipo"] is not None:
@@ -237,6 +267,12 @@ def conferir_nf_vs_portfolio(
             numocps_relevantes.add(str(item["numocp"]))
             if item["seqipo"] is not None:
                 seqipos_relevantes.setdefault(str(item["numocp"]), set()).add(item["seqipo"])
+            # Mesma regra do fluxo: OC vinculada mas ainda não aprovada
+            # (SITAPR != 'APR') cobre a quantidade, só que a NF segue esperando
+            # o comprador — não pode aparecer como "OK" liso.
+            aguardando = sitapr_vinc != "APR"
+            if aguardando:
+                itens_aguardando_aprovacao += 1
             itens_resultado.append({
                 "seqipc":            item["seqipc"],
                 "codpro":            item["codpro"],
@@ -245,6 +281,7 @@ def conferir_nf_vs_portfolio(
                 "qtdinf":            qtd_nf,
                 "qtd_oc_disponivel": qtd_nf,
                 "coberto":           True,
+                "aguardando_aprovacao": aguardando,
                 "fora_portfolio":    False,  # chegou aqui só se profor JÁ está no portfólio (trava acima)
                 "ocs_cobertura":     [{"numocp": item["numocp"], "seqipo": item["seqipo"], "codpro": item["codpro"]}],
                 "divergencia":       None,
@@ -263,6 +300,9 @@ def conferir_nf_vs_portfolio(
             total_cobertos += 1
             numocps_relevantes.add(str(oc_nf["numocp"]))
             seqipos_relevantes.setdefault(str(oc_nf["numocp"]), set()).add(linha_nf["seqipo"])
+            aguardando = oc_nf["sitapr"] != "APR"
+            if aguardando:
+                itens_aguardando_aprovacao += 1
             itens_resultado.append({
                 "seqipc":            item["seqipc"],
                 "codpro":            item["codpro"],
@@ -271,6 +311,7 @@ def conferir_nf_vs_portfolio(
                 "qtdinf":            qtd_nf,
                 "qtd_oc_disponivel": qtd_nf,
                 "coberto":           True,
+                "aguardando_aprovacao": aguardando,
                 "fora_portfolio":    False,
                 "oc_da_nf":          True,
                 "ocs_cobertura":     [{"numocp": oc_nf["numocp"], "seqipo": linha_nf["seqipo"], "codpro": linha_nf["codpro"]}],
@@ -372,6 +413,8 @@ def conferir_nf_vs_portfolio(
         "itens_nf":             itens_resultado,
         "ocs_abertas":          ocs_abertas,
         "fora_portfolio":       fora_portfolio,
+        "cadastro_incompleto":  cadastro_incompleto,
+        "itens_aguardando_aprovacao": itens_aguardando_aprovacao,
         "total_nf":             len(itens_resultado),
         "total_cobertos":       total_cobertos,
         "confirmado":           confirmado,

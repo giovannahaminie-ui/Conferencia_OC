@@ -261,8 +261,8 @@ def oc_processamentos():
         cur.execute("""
             SELECT t.* FROM nf_processamento t
             INNER JOIN (
-                SELECT numnfc, MAX(id) AS max_id FROM nf_processamento GROUP BY numnfc
-            ) u ON u.numnfc = t.numnfc AND u.max_id = t.id
+                SELECT chvnel, MAX(id) AS max_id FROM nf_processamento GROUP BY chvnel
+            ) u ON u.chvnel = t.chvnel AND u.max_id = t.id
             ORDER BY t.id DESC
         """)
         rows = [dict(r) for r in cur.fetchall()]
@@ -308,11 +308,12 @@ def oc_processamentos():
         return jsonify({"erro": str(e)}), 500
 
 
-@app.route("/api/oc/log/<numnfc>", methods=["GET"])
-def oc_log_acoes(numnfc):
+@app.route("/api/oc/log/<chvnel>", methods=["GET"])
+def oc_log_acoes(chvnel):
     """
     Retorna o histórico completo de ações registradas (nf_log_acoes) para
-    uma NF específica, em ordem cronológica — pra comparar passo a passo
+    uma NF específica (chave CHVNEL — o número da NF repete entre
+    fornecedores e misturava o histórico), em ordem cronológica — pra comparar passo a passo
     o que o sistema fez (Etapa 1, portfólio, item a item, notificações,
     monitoramento, liberação).
     """
@@ -322,9 +323,9 @@ def oc_log_acoes(numnfc):
         cur.execute("""
             SELECT id, numnfc, chvnel, etapa, acao, detalhe, seqipc, criado_em
             FROM nf_log_acoes
-            WHERE numnfc = ?
+            WHERE chvnel = ?
             ORDER BY id ASC
-        """, (str(numnfc),))
+        """, (str(chvnel),))
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
         return jsonify(rows)

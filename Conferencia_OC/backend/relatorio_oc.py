@@ -83,20 +83,20 @@ def _coletar_linhas(desde=None, ate=None):
     # Com MAX(criado_em) o SQLite traz codemp/codfil/nomfor da linha mais
     # recente (regra de "bare columns" com um único min/max).
     nfs = cur.execute("""
-        SELECT numnfc, codemp, codfil, nomfor, MAX(criado_em) AS quando
+        SELECT numnfc, codemp, codfil, nomfor, MAX(criado_em) AS quando, chvnel
         FROM nf_processamento
         WHERE status = 'AGUARDANDO_INTEGRACAO'
           AND substr(criado_em, 1, 10) BETWEEN ? AND ?
-        GROUP BY numnfc
+        GROUP BY chvnel
     """, (desde, ate)).fetchall()
 
     linhas = []
-    for numnfc, codemp, codfil, nomfor, _quando in nfs:
+    for numnfc, codemp, codfil, nomfor, _quando, chvnel in nfs:
         r = cur.execute("""
             SELECT divergencias FROM nf_processamento
-            WHERE numnfc = ? AND status = 'AGUARDANDO_APROVACAO_OC'
+            WHERE chvnel = ? AND status = 'AGUARDANDO_APROVACAO_OC'
             ORDER BY id DESC LIMIT 1
-        """, (numnfc,)).fetchone()
+        """, (chvnel,)).fetchone()
         if not r:
             continue  # NF foi direto pra integração — nenhuma OC gerada
 
