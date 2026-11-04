@@ -3,6 +3,7 @@ import re
 import sys
 from io import BytesIO
 from functools import wraps
+from datetime import timedelta
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
@@ -37,7 +38,7 @@ def _ler_env(chave: str, default: str = "") -> str:
     return os.environ.get(chave, default)
 
 app.secret_key = _ler_env("FLASK_SECRET_KEY") or os.urandom(24)
-
+app.permanent_session_lifetime = timedelta(days=30)  # sessão expira em 30 dias de inatividade
 def admin_required(f):
     """Bloqueia a rota pra quem não é admin (usado nas ações restritas à Jéssica)."""
     @wraps(f)
