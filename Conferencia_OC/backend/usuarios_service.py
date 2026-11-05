@@ -41,7 +41,7 @@ def _row_usuario(row) -> dict:
         "nomusu":   row["nomusu"],
         "cor":      row["cor"],
         "is_admin": bool(row["is_admin"]),
-        "precisa_criar_senha": row["senha_hash"] is None,
+        "precisa_criar_senha": False,  # legado: a senha agora é a do Sapiens
         # None = sem restrição (vê todas as colunas) — padrão pra quem nunca foi configurado.
         "colunas_visiveis": json.loads(colunas_raw) if colunas_raw else None,
     }
@@ -83,6 +83,52 @@ def obter_ou_criar_usuario(codusu: str, nomusu: str = "") -> dict:
         row = conn.execute(
             "SELECT * FROM nf_usuarios WHERE codusu = ?", (codusu,)
         ).fetchone()
+        return _row_usuario(row)
+    finally:
+        conn.close()
+
+
+_CORES_AUTO = [
+    "#4c8dae", "#7c6fcf", "#16a34a", "#d97706", "#dc2626", "#0891b2", "#be185d",
+    "#65a30d", "#9333ea", "#0f766e", "#2563eb", "#0d9488", "#ca8a04", "#ea580c",
+]
+
+
+def _nome_bonito(nomusu_sapiens: str) -> str:
+    """'giovanna.ferreira' → 'Giovanna Ferreira' (nome de exibição no avatar/sino)."""
+    partes = [p for p in str(nomusu_sapiens).replace("_", ".").split(".") if p]
+    return " ".join(p.capitalize() for p in partes) or str(nomusu_sapiens)
+
+
+def registrar_login_sapiens(codusu: str, nomusu_sapiens: str) -> dict:
+    """
+    Pós-validação no Sapiens: garante a linha em nf_usuarios (cria no 1º
+    acesso — comum, exceto ADMIN_CODUSUS — com cor automática) e devolve o
+    usuário. Quem já existia mantém nome, cor, nível e colunas como estavam.
+    Nenhuma senha é gravada: quem autentica é sempre o Sapiens.
+    """
+    codusu = str(codusu).strip()
+    conn = get_local_connection()
+    try:
+        row = conn.execute("SELECT * FROM nf_usuarios WHERE codusu = ?", (codusu,)).fetchone()
+        if not row:
+            is_admin = 1 if codusu in ADMIN_CODUSUS else 0
+            cor = _CORES_AUTO[int(codusu) % len(_CORES_AUTO)] if codusu.isdigit() else _CORES_AUTO[0]
+            conn.execute(
+                "INSERT INTO nf_usuarios (codusu, nomusu, cor, is_admin) VALUES (?, ?, ?, ?)",
+                (codusu, _nome_bonito(nomusu_sapiens), cor, is_admin),
+            )
+        else:
+            if not (row["nomusu"] or "").strip():
+                conn.execute("UPDATE nf_usuarios SET nomusu = ? WHERE codusu = ?",
+                             (_nome_bonito(nomusu_sapiens), codusu))
+            if not row["cor"]:
+                conn.execute("UPDATE nf_usuarios SET cor = ? WHERE codusu = ?",
+                             (_CORES_AUTO[0], codusu))
+            if codusu in ADMIN_CODUSUS and not row["is_admin"]:
+                conn.execute("UPDATE nf_usuarios SET is_admin = 1 WHERE codusu = ?", (codusu,))
+        conn.commit()
+        row = conn.execute("SELECT * FROM nf_usuarios WHERE codusu = ?", (codusu,)).fetchone()
         return _row_usuario(row)
     finally:
         conn.close()
@@ -166,7 +212,7 @@ def listar_usuarios() -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT codusu, nomusu, cor, is_admin, colunas_visiveis "
-            "FROM nf_usuarios WHERE senha_hash IS NOT NULL ORDER BY nomusu"
+            "FROM nf_usuarios ORDER BY nomusu"
         ).fetchall()
         resultado = []
         for r in rows:

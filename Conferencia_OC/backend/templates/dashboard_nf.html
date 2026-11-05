@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conferência de OC — Notas Fiscais</title>
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/static/icone_tiete.png">
 <style>
   :root {
     --bg:         #eef1f6;
@@ -1703,83 +1705,31 @@
     <div class="login-form-panel">
      <div class="login-form-inner">
       <div class="login-title-row"><span class="login-title-ico"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span><div class="login-title" id="loginTitle">Entrar</div></div>
-      <div class="login-sub" id="loginSub">Informe seu código de usuário pra continuar.</div>
-
-      <div class="login-steps" id="loginSteps"><i class="on"></i><i></i></div>
+      <div class="login-sub" id="loginSub">Entre com o mesmo usuário e senha do Sapiens.</div>
 
       <div id="loginErro" class="field-erro"></div>
 
-      <!-- Passo 1: codusu -->
       <div id="loginPassoCodusu">
         <div class="field">
-          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Código de usuário</label>
+          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Usuário do Sapiens</label>
           <div class="input-wrap">
             <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span>
-            <input type="text" id="loginCodusu" autocomplete="off" placeholder="Ex: 675">
+            <input type="text" id="loginCodusu" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="nome.sobrenome">
           </div>
         </div>
-        <div class="btn-row">
-          <button class="btn primary" id="loginBtnIdentificar" style="width:100%">
-            Continuar
-            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Passo 2a: senha -->
-      <div id="loginPassoSenha" style="display:none">
         <div class="field">
-          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Senha</label>
+          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Senha do Sapiens</label>
           <div class="input-wrap">
             <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
-            <input type="password" id="loginSenha" autocomplete="off">
+            <input type="password" id="loginSenha" autocomplete="current-password">
             <button type="button" class="pw-toggle" aria-label="Mostrar senha" onclick="alternarSenha(this,'loginSenha')">
               <svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-eye"></use></svg>
             </button>
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn" id="loginBtnVoltar1">
-            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-left"></use></svg>
-            Voltar
-          </button>
-          <button class="btn primary" id="loginBtnEntrar" style="flex:1">
+          <button class="btn primary" id="loginBtnEntrar" style="width:100%">
             Entrar
-            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Passo 2b: primeiro acesso -->
-      <div id="loginPassoCriar" style="display:none">
-        <div class="field" id="loginCampoNome">
-          <label>Seu nome</label>
-          <div class="input-wrap">
-            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-user"></use></svg></span>
-            <input type="text" id="loginNome" autocomplete="off">
-          </div>
-        </div>
-        <div class="field">
-          <label><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-key"></use></svg> Crie uma senha</label>
-          <div class="input-wrap">
-            <span class="field-icon"><svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-lock"></use></svg></span>
-            <input type="password" id="loginNovaSenha" autocomplete="off">
-            <button type="button" class="pw-toggle" aria-label="Mostrar senha" onclick="alternarSenha(this,'loginNovaSenha')">
-              <svg class="icon-sm" viewBox="0 0 24 24"><use href="#icon-eye"></use></svg>
-            </button>
-          </div>
-        </div>
-        <div class="field">
-          <label>Escolha sua cor</label>
-          <div class="color-picker" id="loginCorPicker"></div>
-        </div>
-        <div class="btn-row">
-          <button class="btn" id="loginBtnVoltar2">
-            <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-left"></use></svg>
-            Voltar
-          </button>
-          <button class="btn primary" id="loginBtnCriar" style="flex:1">
-            Criar e entrar
             <svg class="icon" viewBox="0 0 24 24"><use href="#icon-arrow-right"></use></svg>
           </button>
         </div>
@@ -1885,6 +1835,7 @@
         <button class="bell-btn" id="bellBtn"><svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24"><use href="#icon-bell"></use></svg><span class="bell-count" id="bellCount">0</span></button>
         <div class="bell-panel" id="bellPanel">
           <div class="bell-panel-head">Notificações</div>
+          <button id="bellAtivar" type="button" style="display:none;width:100%;padding:9px 14px;border:0;border-bottom:1px solid var(--border);background:var(--bg-subtle);color:var(--accent-1);font-size:0.7rem;font-weight:700;cursor:pointer;text-align:left"></button>
           <div id="bellItems"></div>
         </div>
       </div>
@@ -1899,8 +1850,8 @@
       <button class="nav-item active" id="navBoard" title="Board">
         <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-clipboard-list"></use></svg></span><span class="nav-label">Board</span>
       </button>
-      <button class="nav-item" id="navCrm" style="display:none" title="CRM — Ranking">
-        <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-chart"></use></svg></span><span class="nav-label">CRM — Ranking</span>
+      <button class="nav-item" id="navCrm" style="display:none" title="Ranking">
+        <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-chart"></use></svg></span><span class="nav-label">Ranking</span>
       </button>
       <button class="nav-item" id="navRelatorioOc" style="display:none" title="Relatório de OC geradas para aprovação e aprovadas">
         <span class="nav-ico"><svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24"><use href="#icon-file"></use></svg></span><span class="nav-label">Relatório de OC</span>
@@ -3145,20 +3096,6 @@ function iniciais(nome, codusu) {
 }
 
 /* ── Login ───────────────────────────────────────────────── */
-function montarColorPicker() {
-  const el = document.getElementById("loginCorPicker");
-  el.innerHTML = PALETA_CORES.map(c => `<div class="color-dot" style="background:${c}" data-cor="${c}"></div>`).join("");
-  el.querySelectorAll(".color-dot").forEach(d => {
-    d.addEventListener("click", () => {
-      el.querySelectorAll(".color-dot").forEach(x => x.classList.remove("selected"));
-      d.classList.add("selected");
-    });
-  });
-}
-function corSelecionada() {
-  const sel = document.querySelector("#loginCorPicker .color-dot.selected");
-  return sel ? sel.dataset.cor : null;
-}
 function mostrarLogin() { document.getElementById("loginOverlay").classList.add("open"); }
 function esconderLogin() { document.getElementById("loginOverlay").classList.remove("open"); }
 function loginErro(msg) { document.getElementById("loginErro").textContent = msg || ""; }
@@ -3200,96 +3137,33 @@ function copiarNumero(botao, valor) {
   }
 }
 
-function irParaPassoCodusu() {
-  document.getElementById("loginPassoCodusu").style.display = "";
-  document.getElementById("loginPassoSenha").style.display  = "none";
-  document.getElementById("loginPassoCriar").style.display  = "none";
-  document.getElementById("loginSteps").innerHTML = '<i class="on"></i><i></i>';
-  document.getElementById("loginTitle").textContent = "Entrar";
-  document.getElementById("loginSub").textContent = "Informe seu código de usuário pra continuar.";
-  loginErro("");
-}
-
-document.getElementById("loginBtnIdentificar").addEventListener("click", async () => {
-  const codusu = document.getElementById("loginCodusu").value.trim();
-  if (!codusu) { loginErro("Informe o código de usuário."); return; }
-  loginErro("");
-  try {
-    const r = await fetch("/api/auth/identificar", {
-      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({codusu}),
-    });
-    const d = await r.json();
-    if (!r.ok) { loginErro(d.erro || "Erro."); return; }
-    document.getElementById("loginPassoCodusu").style.display = "none";
-    if (d.existe && d.nomusu) {
-      document.getElementById("loginTitle").textContent = `Bem vinda(o), ${d.nomusu}`;
-      document.getElementById("loginSub").textContent = d.precisa_criar_senha ? "Crie sua senha para continuar." : "Digite sua senha para continuar.";
-    }
-    if (d.existe && !d.precisa_criar_senha) {
-      document.getElementById("loginPassoSenha").style.display = "";
-      document.getElementById("loginSenha").value = "";
-      document.getElementById("loginSenha").focus();
-      document.getElementById("loginSteps").innerHTML = '<i class="on"></i><i class="on"></i>';
-    } else {
-      // primeiro acesso: se o codusu já existe (foi atribuído por um admin
-      // antes de logar alguma vez), não pede nome de novo
-      document.getElementById("loginCampoNome").style.display = d.existe ? "none" : "";
-      document.getElementById("loginPassoCriar").style.display = "";
-      montarColorPicker();
-    }
-  } catch(e) { loginErro("Falha na conexão."); }
-});
-
-document.getElementById("loginBtnVoltar1").addEventListener("click", irParaPassoCodusu);
-document.getElementById("loginBtnVoltar2").addEventListener("click", irParaPassoCodusu);
-
-document.getElementById("loginBtnEntrar").addEventListener("click", async () => {
-  const codusu = document.getElementById("loginCodusu").value.trim();
-  const senha  = document.getElementById("loginSenha").value;
-  if (!senha) { loginErro("Informe a senha."); return; }
+let _logando = false;
+async function entrarSapiens() {
+  if (_logando) return;
+  const usuario = document.getElementById("loginCodusu").value.trim();
+  const senha   = document.getElementById("loginSenha").value;
+  if (!usuario || !senha) { loginErro("Informe usuário e senha do Sapiens."); return; }
+  const btn = document.getElementById("loginBtnEntrar");
+  _logando = true; btn.disabled = true; loginErro("");
   try {
     const r = await fetch("/api/auth/login", {
-      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({codusu, senha}),
-    });
-    const d = await r.json();
-    if (!r.ok) { loginErro(d.erro || "Login inválido."); return; }
-    aoLogar(d);
-  } catch(e) { loginErro("Falha na conexão."); }
-});
-
-document.getElementById("loginBtnCriar").addEventListener("click", async () => {
-  const codusu = document.getElementById("loginCodusu").value.trim();
-  const nomusu = document.getElementById("loginNome").value.trim();
-  const senha  = document.getElementById("loginNovaSenha").value;
-  const cor    = corSelecionada();
-  if (!senha || senha.length < 4) { loginErro("Senha muito curta (mínimo 4 caracteres)."); return; }
-  if (!cor) { loginErro("Escolha uma cor."); return; }
-  if (document.getElementById("loginCampoNome").style.display !== "none" && !nomusu) { loginErro("Informe seu nome."); return; }
-  try {
-    const r = await fetch("/api/auth/criar-senha", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({codusu, nomusu, senha, cor}),
+      body: JSON.stringify({usuario, senha}),
     });
-    const d = await r.json();
-    if (!r.ok) { loginErro(d.erro || "Erro."); return; }
-    aoLogar(d);
+    const { ok, data } = await lerJsonSeguro(r);
+    if (!ok) { loginErro(data.erro || "Não foi possível entrar."); return; }
+    document.getElementById("loginSenha").value = "";
+    aoLogar(data);
   } catch(e) { loginErro("Falha na conexão."); }
-});
-
-// Enter em qualquer campo do login aciona o botão principal daquele passo
-// (Continuar / Entrar / Criar e entrar), sem precisar clicar.
-function ligarEnter(inputId, botaoId) {
-  document.getElementById(inputId).addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById(botaoId).click();
-    }
-  });
+  finally { _logando = false; btn.disabled = false; }
 }
-ligarEnter("loginCodusu",    "loginBtnIdentificar");
-ligarEnter("loginSenha",     "loginBtnEntrar");
-ligarEnter("loginNome",      "loginBtnCriar");
-ligarEnter("loginNovaSenha", "loginBtnCriar");
+document.getElementById("loginBtnEntrar").addEventListener("click", entrarSapiens);
+
+// Enter em qualquer campo do login entra
+["loginCodusu", "loginSenha"].forEach(id =>
+  document.getElementById(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); entrarSapiens(); }
+  }));
 
 /* ── Menu do usuário (avatar + dropdown) ──────────────────── */
 function fecharUserPop() {
@@ -3412,28 +3286,156 @@ function iniciarAposLogin() {
   loopOcAlerta();
 }
 
-async function verificarAuth() {
+/* Só mostra o login quando o servidor DIZ que não há sessão. Erro de rede
+   (PC saindo do repouso, Wi-Fi voltando), 500 ou servidor ocupado numa
+   consulta longa do Oracle não são "deslogado" — antes qualquer falha aqui
+   jogava pro login mesmo com a sessão válida. Tenta de novo algumas vezes. */
+async function verificarAuth(tentativa = 0) {
   try {
-    const r = await fetch("/api/auth/me");
+    const r = await fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     if (d.autenticado) aoLogar(d);
     else mostrarLogin();
-  } catch(e) { mostrarLogin(); }
+  } catch(e) {
+    if (tentativa < 8) setTimeout(() => verificarAuth(tentativa + 1), 1500 * (tentativa + 1));
+    else mostrarLogin();
+  }
+}
+
+/* ── Aviso do navegador + som ───────────────────────────── */
+let _audioCtx = null;
+let _ultimoIdNotif = null;   // null = ainda não carregou a 1ª vez
+
+// Chrome/Edge só liberam som e permissão depois de um gesto do usuário (clique/tecla).
+// Toda vez que a página recarrega o "destravamento" se perde, então o listener
+// fica ativo até realmente destravar (antes era {once:true}: se o 1º clique
+// fosse no login, o som nunca mais tocava naquela carga).
+function _avisosOk() {
+  return ("Notification" in window) && Notification.permission === "granted"
+      && _audioCtx && _audioCtx.state === "running";
+}
+function destravarAvisos() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state !== "running") _audioCtx.resume();
+  } catch {}
+  try {
+    if ("Notification" in window && Notification.permission === "default") {
+      const p = Notification.requestPermission();
+      if (p && p.then) p.then(atualizarBotaoAvisos);
+    }
+  } catch {}
+  atualizarBotaoAvisos();
+}
+["pointerdown", "keydown", "touchstart"].forEach(ev =>
+  document.addEventListener(ev, function _u() {
+    destravarAvisos();
+    if (_avisosOk()) document.removeEventListener(ev, _u);
+  }, true));
+
+// Botão no painel do sino que mostra por que o aviso/som não vai funcionar
+function atualizarBotaoAvisos() {
+  const b = document.getElementById("bellAtivar");
+  if (!b) return;
+  let msg = "";
+  if (!("Notification" in window)) {
+    msg = "Este navegador/endereço não permite avisos na tela (precisa de https ou localhost).";
+  } else if (Notification.permission === "denied") {
+    msg = "Avisos bloqueados — clique no cadeado ao lado do endereço e permita Notificações.";
+  } else if (Notification.permission === "default") {
+    msg = "Clique aqui para ativar avisos e som.";
+  } else if (!_audioCtx || _audioCtx.state !== "running") {
+    msg = "Clique aqui para ativar o som.";
+  }
+  b.textContent = msg;
+  b.style.display = msg ? "block" : "none";
+  b.style.cursor = (msg.startsWith("Clique aqui")) ? "pointer" : "default";
+}
+document.getElementById("bellAtivar").addEventListener("click", (e) => {
+  e.stopPropagation();
+  destravarAvisos();
+  tocarSomNotificacao();   // som de teste
+});
+
+function tocarSomNotificacao() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    const t0 = _audioCtx.currentTime;
+    [880, 1175].forEach((freq, i) => {          // dois "plim"
+      const osc = _audioCtx.createOscillator(), gain = _audioCtx.createGain();
+      const ini = t0 + i * 0.18;
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ini);
+      gain.gain.exponentialRampToValueAtTime(0.3, ini + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ini + 0.16);
+      osc.connect(gain).connect(_audioCtx.destination);
+      osc.start(ini); osc.stop(ini + 0.18);
+    });
+  } catch {}
+}
+
+function mostrarNotificacaoNavegador(novas) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const uma = novas.length === 1 ? novas[0] : null;
+  const notif = new Notification(uma ? "Conferência de OC" : `Conferência de OC — ${novas.length} avisos`, {
+    body: uma ? uma.mensagem : novas.slice(0, 3).map(n => n.mensagem).join("\n"),
+    icon: "/static/icone_tiete.png",
+    badge: "/static/icone_tiete.png",
+    tag: uma ? "nf-notif-" + uma.id : "nf-notif-lote",
+    requireInteraction: true,   // fica na tela até clicar
+  });
+  notif.onclick = () => { window.focus(); notif.close(); };
+}
+
+function avisarNovas(d) {
+  const maxId = d.itens.reduce((m, n) => Math.max(m, n.id), 0);
+  const novas = _ultimoIdNotif === null
+    ? d.itens.filter(n => !n.lida)                              // 1ª carga: avisa as não lidas
+    : d.itens.filter(n => !n.lida && n.id > _ultimoIdNotif);    // depois: só as novas
+  _ultimoIdNotif = maxId;
+  if (!novas.length) return;
+  tocarSomNotificacao();
+  try { mostrarNotificacaoNavegador(novas); } catch {}
 }
 
 /* ── Notificações (sino) ─────────────────────────────────── */
+let _notifBusy = false;
 async function atualizarNotificacoes() {
+  if (_notifBusy) return;
+  _notifBusy = true;
   try {
     const r = await fetch("/api/notificacoes");
+    if (r.status === 401) { mostrarLogin(); return; }   // sessão caiu: mostra o login em vez de ficar mudo
     if (!r.ok) return;
     renderBell(await r.json());
   } catch {}
+  finally { _notifBusy = false; }
 }
-async function loopNotificacoes() {
-  await atualizarNotificacoes();
-  setTimeout(loopNotificacoes, 30000);
+/* Timer em Web Worker: setTimeout/setInterval da página são congelados pelo
+   navegador em aba em segundo plano (1x por minuto ou até menos), e era
+   por isso que o aviso só chegava quando você voltava pra aba. Timers de
+   worker não sofrem esse throttling. Além disso, ao voltar pra aba/janela
+   já checa na hora. */
+function loopNotificacoes() {
+  atualizarNotificacoes();
+  try {
+    const src = "setInterval(()=>postMessage(1), 15000)";
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    w.onmessage = () => atualizarNotificacoes();
+  } catch {
+    setInterval(atualizarNotificacoes, 15000);   // fallback
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) atualizarNotificacoes();
+  });
+  window.addEventListener("focus", atualizarNotificacoes);
+  window.addEventListener("online", atualizarNotificacoes);
 }
 function renderBell(d) {
+  atualizarBotaoAvisos();
+  avisarNovas(d);
   const cnt = document.getElementById("bellCount");
   cnt.textContent = d.nao_lidas;
   cnt.classList.toggle("show", d.nao_lidas > 0);

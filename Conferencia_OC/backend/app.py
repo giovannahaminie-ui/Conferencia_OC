@@ -17,8 +17,9 @@ from oc_service  import (
     buscar_conferencia_integracao, confirmar_conferencia_integracao,
 )
 from scheduler_nf import iniciar_scheduler_nf
+from sapiens_auth import autenticar
 from usuarios_service import (
-    buscar_usuario, obter_ou_criar_usuario, definir_senha, validar_login,
+    buscar_usuario, registrar_login_sapiens,
     listar_usuarios, atribuicao_atual, atribuicoes_ativas, atribuir_nf,
     desatribuir_nf, listar_notificacoes, contar_notificacoes_nao_lidas,
     marcar_notificacoes_lidas, definir_colunas_visiveis, atualizar_cor,
@@ -37,8 +38,37 @@ def _ler_env(chave: str, default: str = "") -> str:
                     return linha.split("=", 1)[1].strip()
     return os.environ.get(chave, default)
 
-app.secret_key = _ler_env("FLASK_SECRET_KEY") or os.urandom(24)
+def _chave_secreta() -> str:
+    """
+    Chave que assina o cookie de sessão. Se não houver FLASK_SECRET_KEY no
+    .env/ambiente, gera uma UMA vez e guarda em backend/.secret_key — antes
+    era os.urandom a cada start, então todo reinício do servidor derrubava
+    o login de todo mundo (e a tela voltava pro login sozinha).
+    """
+    chave = _ler_env("FLASK_SECRET_KEY")
+    if chave:
+        return chave
+    caminho = os.path.join(os.path.dirname(__file__), ".secret_key")
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            chave = f.read().strip()
+        if chave:
+            return chave
+    except OSError:
+        pass
+    chave = os.urandom(32).hex()
+    try:
+        with open(caminho, "w", encoding="utf-8") as f:
+            f.write(chave)
+    except OSError:
+        pass
+    return chave
+
+app.secret_key = _chave_secreta()
 app.permanent_session_lifetime = timedelta(days=30)  # sessão expira em 30 dias de inatividade
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True  # renova os 30 dias a cada uso
 def admin_required(f):
     """Bloqueia a rota pra quem não é admin (usado nas ações restritas à Jéssica)."""
     @wraps(f)
@@ -467,62 +497,29 @@ def oc_detalhe():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# AUTENTICAÇÃO — login por codusu, dois níveis (admin/comum)
+# AUTENTICAÇÃO — login com usuário/senha do Sapiens, dois níveis (admin/comum)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-@app.route("/api/auth/identificar", methods=["POST"])
-def auth_identificar():
-    """
-    Passo 1 do login: só lê (não cria) — evita criar usuário fantasma por
-    erro de digitação do codusu. existe=False → frontend pede nome/senha/cor
-    (primeiro acesso de verdade); existe=True + precisa_criar_senha=True →
-    já foi identificado antes (ex: admin atribuiu algo a ele) mas nunca
-    definiu senha — mesma tela de criar senha, sem pedir nome de novo.
-    """
-    body = request.get_json(force=True)
-    codusu = str(body.get("codusu") or "").strip()
-    if not codusu:
-        return jsonify({"erro": "Informe o código de usuário."}), 400
-    usuario = buscar_usuario(codusu)
-    if not usuario:
-        return jsonify({"existe": False, "codusu": codusu})
-    return jsonify({"existe": True, **usuario})
-
-
-@app.route("/api/auth/criar-senha", methods=["POST"])
-def auth_criar_senha():
-    """Primeiro acesso: cria o usuário (se ainda não existir) e define senha + cor. Já loga em seguida."""
-    body = request.get_json(force=True)
-    codusu = str(body.get("codusu") or "").strip()
-    nomusu = str(body.get("nomusu") or "").strip()
-    senha  = str(body.get("senha") or "")
-    cor    = str(body.get("cor") or "").strip()
-
-    if not codusu or not senha or not cor:
-        return jsonify({"erro": "Informe codusu, senha e cor."}), 400
-    if len(senha) < 4:
-        return jsonify({"erro": "Senha muito curta (mínimo 4 caracteres)."}), 400
-
-    try:
-        obter_ou_criar_usuario(codusu, nomusu)
-        usuario = definir_senha(codusu, senha, cor)
-    except ValueError as e:
-        return jsonify({"erro": str(e)}), 400
-
-    session["codusu"]   = codusu
-    session["is_admin"] = usuario["is_admin"]
-    return jsonify(usuario)
-
 
 @app.route("/api/auth/login", methods=["POST"])
 def auth_login():
-    body = request.get_json(force=True)
-    codusu = str(body.get("codusu") or "").strip()
-    senha  = str(body.get("senha") or "")
-    usuario = validar_login(codusu, senha)
-    if not usuario:
-        return jsonify({"erro": "Código de usuário ou senha inválidos."}), 401
-    session["codusu"]   = codusu
+    """
+    Login com o usuário e a senha do Sapiens (validados no conector SID —
+    ver sapiens_auth.py). Não existe mais cadastro de senha local: o primeiro
+    acesso cria o usuário automaticamente a partir do R999USU.
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    resultado = autenticar(
+        str(body.get("usuario") or ""),
+        str(body.get("senha") or ""),
+        origem=request.remote_addr or "",
+    )
+    if not resultado["ok"]:
+        return jsonify({"erro": resultado["erro"]}), resultado["status"]
+
+    usuario = registrar_login_sapiens(resultado["codusu"], resultado["nomusu"])
+    session.clear()
+    session.permanent   = True   # cookie persistente (sobrevive a fechar o navegador)
+    session["codusu"]   = usuario["codusu"]
     session["is_admin"] = usuario["is_admin"]
     return jsonify(usuario)
 

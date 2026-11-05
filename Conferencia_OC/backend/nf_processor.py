@@ -84,10 +84,8 @@ from oc_service import (
     casar_item_com_ocs_da_nf,
     assinatura_linhas_oc,
 )
-from whatsapp import (
-    notificar_fiscal_pendencias,
-    notificar_junior_criar_oc,
-    notificar_junior_cancelamento_bloqueado,
+from notificacoes import (
+    avisar_aguardando_ligacao, avisar_aguardando_aprovacao_oc, avisar_cancelamento_bloqueado
 )
 
 # Chave de `referencia` (nf_processamento) do estágio AGUARDANDO_APROVACAO_OC
@@ -479,14 +477,14 @@ def _rodar_verificacao_cadastral(dados_nf: dict) -> dict:
                 registrar_log_acao(numnfc, chvnel, VERIFICACAO_CADASTRAL, acao, det)
         _registrar_estagio(dados_nf, AGUARDANDO_LIGACAO, detalhe, referencia=referencia)
         if not _ja_notificado(chvnel):
-            envio = notificar_fiscal_pendencias(numnfc, codfor, dados_nf["nomfor"],
+            envio = avisar_aguardando_ligacao(numnfc, codfor, dados_nf["nomfor"],
                                                  sem_ligacao=itens_fora_portfolio,
                                                  cadastro_incompleto=itens_sem_cadastro)
             if envio.get("sucesso"):
                 _marcar_notificado(chvnel)
-                registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao fiscal — pendência(s) cadastral(is)")
+                registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "Notificação enviada à Jéssica — pendência(s) cadastral(is)")
             else:
-                registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao fiscal — pendência(s) cadastral(is)", str(envio.get("erro")))
+                registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar notificação à Jéssica — pendência(s) cadastral(is)", str(envio.get("erro")))
         print(f"  🏷️  {detalhe}")
         return {"numnfc": numnfc, "resultado": AGUARDANDO_LIGACAO, "detalhe": detalhe}
 
@@ -1133,12 +1131,12 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
         registrar_log_acao(numnfc, chvnel, AGUARDANDO_APROVACAO_OC, "Cancelamento recusado — NF parada até a OC mudar", detalhe)
         _registrar_estagio(dados_nf, AGUARDANDO_APROVACAO_OC, detalhe, referencia={CANCELAMENTO_BLOQUEADO: bloqueio})
         if not _ja_notificado(chvnel):
-            envio = notificar_junior_cancelamento_bloqueado(numnfc, codfor, nomfor, codemp, codfil, bloqueio)
+            envio = avisar_cancelamento_bloqueado(numnfc, codfor, nomfor, codemp, codfil, bloqueio)
             if envio.get("sucesso"):
                 _marcar_notificado(chvnel)
-                registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — cancelamento de OC recusado", detalhe)
+                registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "Notificação enviada à Jéssica — cancelamento de OC recusado", detalhe)
             else:
-                registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — cancelamento recusado", str(envio.get("erro")))
+                registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar notificação à Jéssica — cancelamento recusado", str(envio.get("erro")))
         print(f"  ⛔ {detalhe}")
         return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC, "detalhe": detalhe}
 
@@ -1283,15 +1281,15 @@ def _rodar_verificacao_oc(dados_nf: dict) -> dict:
     # itens_aguardando_aprovacao (vínculo já existia, OC já era conhecida do
     # Junior de uma rodada anterior), não há nada NOVO a notificar.
     if not _ja_notificado(chvnel) and (produtos_apr or produtos_pen):
-        envio = notificar_junior_criar_oc(numnfc, codfor, nomfor,
+        envio = avisar_aguardando_aprovacao_oc(numnfc, codfor, nomfor,
                                   consolidar=produtos_apr, criar_nova=produtos_pen,
                                   codemp=codemp, codfil=codfil,
                                   numocp_apr=referencia_oc.get("apr"), numocp_pen=referencia_oc.get("pen"))
         if envio.get("sucesso"):
             _marcar_notificado(chvnel)
-            registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — OC pendente/consolidar", detalhe)
+            registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "Notificação enviada à Jéssica — OC pendente/consolidar", detalhe)
         else:
-            registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — OC pendente/consolidar", str(envio.get("erro")))
+            registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar notificação à Jéssica — OC pendente/consolidar", str(envio.get("erro")))
     print(f"  ⚠️  {detalhe}")
     return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC, "detalhe": detalhe}
 
@@ -1424,17 +1422,17 @@ def reconferir_oc_pendente(registro: dict) -> dict:
                 # persistidos — só a primeira vez; reconferências seguintes
                 # não repetem enquanto notificado=1.
                 consolidar, criar_nova = _produtos_dos_acumuladores(registro)
-                envio = notificar_junior_criar_oc(numnfc, codfor, registro["nomfor"],
+                envio = avisar_aguardando_aprovacao_oc(numnfc, codfor, registro["nomfor"],
                                           consolidar=consolidar, criar_nova=criar_nova,
                                           codemp=codemp, codfil=codfil,
                                           numocp_apr=referencia_oc.get("apr"), numocp_pen=referencia_oc.get("pen"))
                 if envio.get("sucesso"):
                     _marcar_notificado(chvnel)
-                    registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "WhatsApp enviado ao Junior — OC ainda não aprovada")
-                    print(f"  ⏳ NF {numnfc} — OC(s) {nao_aprovadas} ainda não aprovada(s), notificando Junior")
+                    registrar_log_acao(numnfc, chvnel, "NOTIFICACAO", "Aviso enviado à Jéssica (notificação) — OC ainda não aprovada")
+                    print(f"  ⏳ NF {numnfc} — OC(s) {nao_aprovadas} ainda não aprovada(s), notificando Jéssica")
                 else:
-                    registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar WhatsApp ao Junior — OC ainda não aprovada", str(envio.get("erro")))
-                    print(f"  ⚠️  NF {numnfc} — falha ao notificar Junior: {envio.get('erro')}")
+                    registrar_log_acao(numnfc, chvnel, "ERRO", "Falha ao enviar notificação à Jéssica — OC ainda não aprovada", str(envio.get("erro")))
+                    print(f"  ⚠️  NF {numnfc} — falha ao notificar Jéssica: {envio.get('erro')}")
             else:
                 print(f"  ⏳ NF {numnfc} — OC(s) {nao_aprovadas} ainda não aprovada(s), já notificado (sem reenvio)")
             return {"numnfc": numnfc, "resultado": AGUARDANDO_APROVACAO_OC, "detalhe": f"OC(s) {nao_aprovadas} ainda não aprovada(s)"}

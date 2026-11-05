@@ -27,3 +27,6 @@ __pycache__/
 # Node.js
 node_modules/
 *.db
+
+# Chave de sessão gerada automaticamente
+.secret_key
